@@ -1,0 +1,200 @@
+from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor
+from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.orm import Session
+
+from backend.database.db import get_db
+from backend.models.models import Application, AppSettings
+from backend.models.schemas import ApplicationResponse, ApplicationUpdate
+from backend.services.email_service import validate_email_send_request, send_application_email
+
+router = APIRouter(prefix="/api/applications", tags=["Applications"])
+
+@router.get("", response_model=List[ApplicationResponse])
+def get_applications(status: Optional[str] = None, db: Session = Depends(get_db)):
+    query = db.query(Application)
+    if status:
+        query = query.filter(Application.status == status.upper())
+    return query.order_by(Application.created_at.desc()).all()
+
+
+@router.get("/{app_id}", response_model=ApplicationResponse)
+def get_application_by_id(app_id: str, db: Session = Depends(get_db)):
+    app = db.query(Application).filter(Application.id == app_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found.")
+    return app
+
+
+@router.put("/{app_id}", response_model=ApplicationResponse)
+def update_application(app_id: str, payload: ApplicationUpdate, db: Session = Depends(get_db)):
+    app = db.query(Application).filter(Application.id == app_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found.")
+
+    if payload.company_name is not None:
+        app.company_name = payload.company_name
+    if payload.role is not None:
+        app.role = payload.role
+    if payload.experience is not None:
+        app.experience = payload.experience
+    if payload.recipient_email is not None:
+        app.recipient_email = payload.recipient_email
+    if payload.generated_subject is not None:
+        app.generated_subject = payload.generated_subject
+    if payload.generated_email is not None:
+        app.generated_email = payload.generated_email
+    if payload.status is not None:
+        app.status = payload.status.upper()
+
+    db.commit()
+    db.refresh(app)
+    return app
+
+
+@router.post("/batch-send")
+def batch_send_applications(app_ids: Optional[List[str]] = None, db: Session = Depends(get_db)):
+    """
+    1-Click Batch Send: Transmits all generated application emails concurrently via Gmail SMTP.
+    """
+    settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+    smtp_dict = {
+        "smtp_host": settings.smtp_host if settings else "smtp.gmail.com",
+        "smtp_port": settings.smtp_port if settings else 587,
+        "smtp_username": settings.smtp_username if settings else "yashnagapure25@gmail.com",
+        "smtp_password": settings.smtp_password if settings else "awmtyyfozljwmbvu",
+        "sender_email": settings.sender_email if settings else "yashnagapure25@gmail.com",
+    }
+
+    if app_ids and len(app_ids) > 0:
+        apps = db.query(Application).filter(Application.id.in_(app_ids)).all()
+    else:
+        # Send all ready applications
+        apps = db.query(Application).filter(Application.status.in_(["GENERATED", "REVIEWED", "DRAFT"])).all()
+
+    valid_apps = [a for a in apps if a.recipient_email]
+
+    if not valid_apps:
+        return {"sent_count": 0, "failed_count": 0, "message": "No applications with valid recipient emails were ready to send."}
+
+    sent_count = 0
+    failed_count = 0
+
+    def send_single_app(app: Application):
+        subject = app.generated_subject or app.explicit_subject or f"Application for {app.role} - Yash Nagapure"
+        success, send_err = send_application_email(
+            recipient_email=app.recipient_email,
+            subject=subject,
+            body=app.generated_email,
+            resume_filename=app.resume_filename,
+            smtp_settings=smtp_dict
+        )
+        return app.id, success, send_err
+
+    with ThreadPoolExecutor(max_workers=min(5, len(valid_apps))) as executor:
+        results = list(executor.map(send_single_app, valid_apps))
+
+    for app_id, success, send_err in results:
+        app = db.query(Application).filter(Application.id == app_id).first()
+        if app:
+            if success:
+                app.status = "SENT"
+                app.sent_at = datetime.utcnow()
+                app.error_message = None
+                sent_count += 1
+            else:
+                app.status = "FAILED"
+                app.error_message = send_err
+                failed_count += 1
+            db.commit()
+
+    return {
+        "sent_count": sent_count,
+        "failed_count": failed_count,
+        "message": f"Batch process complete: {sent_count} email(s) sent successfully, {failed_count} failed."
+    }
+
+
+@router.post("/{app_id}/send", response_model=ApplicationResponse)
+def send_application(
+    app_id: str,
+    override_duplicate: bool = Query(False),
+    db: Session = Depends(get_db)
+):
+    app = db.query(Application).filter(Application.id == app_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found.")
+
+    valid, err_msg = validate_email_send_request(
+        recipient_email=app.recipient_email,
+        company_name=app.company_name,
+        role=app.role,
+        subject=app.generated_subject or app.explicit_subject,
+        body=app.generated_email,
+        resume_filename=app.resume_filename
+    )
+
+    if not valid:
+        app.status = "FAILED"
+        app.error_message = err_msg
+        db.commit()
+        db.refresh(app)
+        raise HTTPException(status_code=400, detail=err_msg)
+
+    if not override_duplicate:
+        duplicate = db.query(Application).filter(
+            Application.recipient_email == app.recipient_email,
+            Application.company_name == app.company_name,
+            Application.role == app.role,
+            Application.status == "SENT",
+            Application.id != app.id
+        ).first()
+
+        if duplicate:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Application already sent to {app.company_name} ({app.recipient_email}) for role '{app.role}'."
+            )
+
+    settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+    smtp_dict = {
+        "smtp_host": settings.smtp_host if settings else "smtp.gmail.com",
+        "smtp_port": settings.smtp_port if settings else 587,
+        "smtp_username": settings.smtp_username if settings else "yashnagapure25@gmail.com",
+        "smtp_password": settings.smtp_password if settings else "awmtyyfozljwmbvu",
+        "sender_email": settings.sender_email if settings else "yashnagapure25@gmail.com",
+    }
+
+    subject = app.generated_subject or app.explicit_subject or f"Application for {app.role} - Yash Nagapure"
+
+    success, send_err = send_application_email(
+        recipient_email=app.recipient_email,
+        subject=subject,
+        body=app.generated_email,
+        resume_filename=app.resume_filename,
+        smtp_settings=smtp_dict
+    )
+
+    if success:
+        app.status = "SENT"
+        app.sent_at = datetime.utcnow()
+        app.error_message = None
+    else:
+        app.status = "FAILED"
+        app.error_message = send_err
+
+    db.commit()
+    db.refresh(app)
+    return app
+
+
+@router.delete("/{app_id}")
+def delete_application(app_id: str, db: Session = Depends(get_db)):
+    app = db.query(Application).filter(Application.id == app_id).first()
+    if not app:
+        raise HTTPException(status_code=404, detail="Application not found.")
+
+    db.delete(app)
+    db.commit()
+    return {"message": "Application deleted successfully."}
