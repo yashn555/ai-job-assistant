@@ -10,7 +10,7 @@ from backend.models.schemas import (
     JobParseRequest, ExtractedJob, EmailGenerateRequest, ApplicationResponse
 )
 from backend.services.parser_service import parse_job_text
-from backend.services.nemotron_service import generate_email_content
+from backend.services.llm_engine import generate_email_content
 from backend.routes.auth import get_current_user
 
 router = APIRouter(prefix="/api/jobs", tags=["Jobs"])
@@ -36,6 +36,7 @@ def parse_jobs(
     profile_dict = {
         "name": profile.name if (profile and profile.name) else current_user.name,
         "email": profile.email if (profile and profile.email) else current_user.email,
+        "phone": profile.phone if (profile and profile.phone) else (current_user.phone or ""),
         "degree": profile.degree if profile else "",
         "college": profile.college if profile else "",
         "graduation_year": profile.graduation_year if profile else "",
@@ -141,6 +142,7 @@ def generate_job_email(
     profile_dict = {
         "name": profile.name if (profile and profile.name) else current_user.name,
         "email": profile.email if (profile and profile.email) else current_user.email,
+        "phone": profile.phone if (profile and profile.phone) else (current_user.phone or ""),
         "degree": profile.degree if profile else "",
         "college": profile.college if profile else "",
         "graduation_year": profile.graduation_year if profile else "",

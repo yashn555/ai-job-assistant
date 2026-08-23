@@ -199,6 +199,17 @@ export const api = {
     return handleResponse(res);
   },
 
+  async extractResumeProfile(file) {
+    const formData = new FormData();
+    formData.append('file', file);
+    const res = await fetch(`${API_BASE_URL}/settings/extract-resume-profile`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: formData,
+    });
+    return handleResponse(res);
+  },
+
   async uploadResume(file) {
     const formData = new FormData();
     formData.append('file', file);

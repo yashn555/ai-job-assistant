@@ -60,7 +60,8 @@ class ApplicationResponse(BaseModel):
 
 class ProfileSchema(BaseModel):
     name: str
-    email: Optional[str] = "yashnagapure25@gmail.com"
+    email: Optional[str] = ""
+    phone: Optional[str] = ""
     degree: str
     college: str
     graduation_year: str
@@ -69,6 +70,21 @@ class ProfileSchema(BaseModel):
     portfolio_url: Optional[str] = ""
     skills: List[str]
     projects: List[str]
+    bio: Optional[str] = ""
+    is_profile_complete: Optional[bool] = False
+
+class ResumeExtractResponse(BaseModel):
+    name: Optional[str] = ""
+    email: Optional[str] = ""
+    phone: Optional[str] = ""
+    degree: Optional[str] = ""
+    college: Optional[str] = ""
+    graduation_year: Optional[str] = ""
+    linkedin_url: Optional[str] = ""
+    github_url: Optional[str] = ""
+    portfolio_url: Optional[str] = ""
+    skills: List[str] = []
+    projects: List[str] = []
     bio: Optional[str] = ""
 
 class SettingsSchema(BaseModel):
@@ -87,6 +103,7 @@ class UserSignup(BaseModel):
     name: str
     email: str
     password: str
+    phone: Optional[str] = None
     app_password: Optional[str] = None
 
 class UserLogin(BaseModel):
@@ -97,6 +114,7 @@ class UserResponse(BaseModel):
     id: int
     name: str
     email: str
+    phone: Optional[str] = ""
     app_password: Optional[str] = None
     created_at: datetime
 

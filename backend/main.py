@@ -59,7 +59,7 @@ def health_check():
     return {
         "status": "healthy",
         "service": "AI Job Application Assistant Backend",
-        "nemotron_key_configured": bool(os.getenv("NVIDIA_API_KEY"))
+        "llm_engine": "Custom Local Deterministic LLM Engine Ready"
     }
 
 

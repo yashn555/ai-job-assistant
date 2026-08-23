@@ -47,6 +47,7 @@ export default function ProfileForm({
   // Personal Details
   const [name, setName] = useState(profile?.name || user?.name || '');
   const [email, setEmail] = useState(profile?.email || user?.email || '');
+  const [phone, setPhone] = useState(profile?.phone || user?.phone || '');
   const [degree, setDegree] = useState(profile?.degree || '');
   const [college, setCollege] = useState(profile?.college || '');
   const [graduationYear, setGraduationYear] = useState(profile?.graduation_year || '');
@@ -60,6 +61,11 @@ export default function ProfileForm({
   const [skillsText, setSkillsText] = useState((profile?.skills || []).join(', '));
   const [projectsText, setProjectsText] = useState((profile?.projects || []).join(', '));
   const [bio, setBio] = useState(profile?.bio || '');
+
+  // Resume Extraction state
+  const [isExtracting, setIsExtracting] = useState(false);
+  const [extractSuccessMsg, setExtractSuccessMsg] = useState('');
+  const extractFileRef = React.useRef(null);
 
   // SMTP Settings
   const [smtpHost, setSmtpHost] = useState(appSettings?.smtp_host || 'smtp.gmail.com');
@@ -86,6 +92,7 @@ export default function ProfileForm({
     if (profile) {
       setName(profile.name || user?.name || '');
       setEmail(profile.email || user?.email || '');
+      setPhone(profile.phone || user?.phone || '');
       setDegree(profile.degree || '');
       setCollege(profile.college || '');
       setGraduationYear(profile.graduation_year || '');
@@ -108,11 +115,40 @@ export default function ProfileForm({
     }
   }, [appSettings, user]);
 
+  const handleExtractResumeFile = async (file) => {
+    if (!file) return;
+    setIsExtracting(true);
+    setExtractSuccessMsg('');
+    try {
+      const ext = await window.api.extractResumeProfile(file);
+      if (ext.name) setName(ext.name);
+      if (ext.email) setEmail(ext.email);
+      if (ext.phone) setPhone(ext.phone);
+      if (ext.degree) setDegree(ext.degree);
+      if (ext.college) setCollege(ext.college);
+      if (ext.graduation_year) setGraduationYear(ext.graduation_year);
+      if (ext.linkedin_url) setLinkedin(ext.linkedin_url);
+      if (ext.github_url) setGithub(ext.github_url);
+      if (ext.portfolio_url) setPortfolio(ext.portfolio_url);
+      if (ext.skills && ext.skills.length > 0) setSkillsText(ext.skills.join(', '));
+      if (ext.projects && ext.projects.length > 0) setProjectsText(ext.projects.join(', '));
+      if (ext.bio) setBio(ext.bio);
+      
+      setExtractSuccessMsg(`Extracted details successfully from '${file.name}'!`);
+      setTimeout(() => setExtractSuccessMsg(''), 4000);
+    } catch (err) {
+      alert(`Resume extraction failed: ${err.message}`);
+    } finally {
+      setIsExtracting(false);
+    }
+  };
+
   // Helper to build full profile payload without losing current state
   const getCurrentProfilePayload = () => {
     return {
       name,
       email,
+      phone,
       degree,
       college,
       graduation_year: graduationYear,
@@ -198,11 +234,76 @@ export default function ProfileForm({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
 
+      {/* Extract From Resume Action Box */}
+      <div style={{
+        padding: '20px 24px',
+        backgroundColor: 'rgba(99, 102, 241, 0.08)',
+        border: '1px dashed var(--accent-primary)',
+        borderRadius: '16px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '16px'
+      }}>
+        <div>
+          <h4 style={{ fontSize: '1rem', fontWeight: '700', color: 'var(--text-primary)', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Sparkles size={18} color="var(--accent-primary)" /> Auto-fill Profile from Resume PDF
+          </h4>
+          <p style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', marginTop: '4px', margin: 0 }}>
+            Upload your resume PDF/DOCX to extract Name, Phone, Degree, Skills, Projects, and Social links automatically.
+          </p>
+        </div>
+
+        <input
+          type="file"
+          ref={extractFileRef}
+          onChange={(e) => e.target.files?.[0] && handleExtractResumeFile(e.target.files[0])}
+          accept=".pdf,.docx,.txt"
+          style={{ display: 'none' }}
+        />
+
+        <button
+          type="button"
+          onClick={() => extractFileRef.current?.click()}
+          disabled={isExtracting}
+          className="btn btn-primary"
+          style={{ padding: '10px 20px', fontSize: '0.9rem', fontWeight: '700', borderRadius: '10px', boxShadow: '0 4px 12px rgba(99, 102, 241, 0.3)' }}
+        >
+          {isExtracting ? (
+            <>
+              <Loader2 size={16} className="animate-pulse" /> Extracting Details...
+            </>
+          ) : (
+            <>
+              <Upload size={16} /> Extract From Resume PDF
+            </>
+          )}
+        </button>
+      </div>
+
+      {extractSuccessMsg && (
+        <div style={{
+          padding: '12px 16px',
+          backgroundColor: 'rgba(34, 197, 94, 0.15)',
+          border: '1px solid rgba(34, 197, 94, 0.4)',
+          borderRadius: '10px',
+          color: '#4ade80',
+          fontSize: '0.88rem',
+          fontWeight: '600',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <Check size={18} /> {extractSuccessMsg}
+        </div>
+      )}
+
       {/* Global Quick Action Banner */}
       <div style={{
         display: 'flex',
         alignItems: 'center',
-        justifyContent: 'space-between',
+        justify: 'space-between',
         padding: '16px 20px',
         backgroundColor: 'var(--bg-card)',
         border: '1px solid var(--border-color)',
@@ -259,9 +360,9 @@ export default function ProfileForm({
           )}
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '16px' }}>
           <div className="form-group">
-            <label className="form-label">Full Name</label>
+            <label className="form-label">Full Name *</label>
             <input
               type="text"
               className="form-input"
@@ -272,13 +373,24 @@ export default function ProfileForm({
           </div>
 
           <div className="form-group">
-            <label className="form-label">Email Address</label>
+            <label className="form-label">Email Address *</label>
             <input
               type="email"
               className="form-input"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+            />
+          </div>
+
+          <div className="form-group">
+            <label className="form-label">Phone Number</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="+91 9876543210"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
             />
           </div>
         </div>

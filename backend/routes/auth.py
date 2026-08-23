@@ -129,6 +129,7 @@ def signup(payload: UserSignup, db: Session = Depends(get_db)):
     new_user = User(
         name=payload.name.strip(),
         email=email_clean,
+        phone=payload.phone.strip() if payload.phone else "",
         password_hash=hash_password(payload.password),
         app_password=payload.app_password.strip() if payload.app_password else None
     )
@@ -141,12 +142,14 @@ def signup(payload: UserSignup, db: Session = Depends(get_db)):
         user_id=new_user.id,
         name=new_user.name,
         email=new_user.email,
+        phone=new_user.phone or "",
         degree="",
         college="",
         graduation_year="",
         skills_json=json.dumps([]),
         projects_json=json.dumps([]),
-        bio=""
+        bio="",
+        is_profile_complete=False
     )
     db.add(profile)
 

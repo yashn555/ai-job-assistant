@@ -9,6 +9,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(255), nullable=False)
     email = Column(String(255), unique=True, index=True, nullable=False)
+    phone = Column(String(50), nullable=True, default="")
     password_hash = Column(String(255), nullable=False)
     app_password = Column(String(255), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -42,6 +43,7 @@ class CandidateProfile(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
     name = Column(String(255), default="")
     email = Column(String(255), default="")
+    phone = Column(String(50), default="")
     degree = Column(String(255), default="")
     college = Column(String(255), default="")
     graduation_year = Column(String(50), default="")
@@ -51,6 +53,7 @@ class CandidateProfile(Base):
     skills_json = Column(Text, default='[]')
     projects_json = Column(Text, default='[]')
     bio = Column(Text, default="")
+    is_profile_complete = Column(Boolean, default=False)
 
 class AppSettings(Base):
     __tablename__ = "app_settings"

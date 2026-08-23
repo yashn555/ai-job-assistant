@@ -91,6 +91,21 @@ def apply_migrations():
                         conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} INTEGER DEFAULT 1"))
                         conn.commit()
 
+            if "users" in table_names:
+                columns = [c["name"] for c in inspector.get_columns("users")]
+                if "phone" not in columns:
+                    conn.execute(text("ALTER TABLE users ADD COLUMN phone VARCHAR(50) DEFAULT ''"))
+                    conn.commit()
+
+            if "candidate_profile" in table_names:
+                columns = [c["name"] for c in inspector.get_columns("candidate_profile")]
+                if "phone" not in columns:
+                    conn.execute(text("ALTER TABLE candidate_profile ADD COLUMN phone VARCHAR(50) DEFAULT ''"))
+                    conn.commit()
+                if "is_profile_complete" not in columns:
+                    conn.execute(text("ALTER TABLE candidate_profile ADD COLUMN is_profile_complete BOOLEAN DEFAULT 0"))
+                    conn.commit()
+
             if "app_settings" in table_names:
                 columns = [c["name"] for c in inspector.get_columns("app_settings")]
                 if "resume_base64" not in columns:

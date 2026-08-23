@@ -3,6 +3,7 @@ import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import EmailPreviewModal from './components/EmailPreviewModal';
 import LoginPage from './pages/LoginPage';
+import OnboardingFlow from './pages/OnboardingFlow';
 
 import Dashboard from './pages/Dashboard';
 import ApplicationsPage from './pages/ApplicationsPage';
@@ -17,6 +18,7 @@ window.api = api;
 export default function App() {
   const [user, setUser] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [applications, setApplications] = useState([]);
@@ -73,6 +75,11 @@ export default function App() {
       setProfile(profRes);
       setAppSettings(settingsRes);
       setResumesList(resumesRes || []);
+
+      // If candidate profile or App password not set, launch onboarding flow automatically
+      if (profRes && (!profRes.degree || !settingsRes?.smtp_password)) {
+        setShowOnboarding(true);
+      }
     } catch (err) {
       console.error('Error loading data:', err);
     }
@@ -293,6 +300,28 @@ export default function App() {
 
   if (!user) {
     return <LoginPage onAuthSuccess={handleAuthSuccess} />;
+  }
+
+  if (showOnboarding) {
+    return (
+      <OnboardingFlow
+        user={user}
+        profile={profile}
+        appSettings={appSettings}
+        onSaveProfile={async (data) => {
+          const updated = await api.updateProfile(data);
+          setProfile(updated);
+        }}
+        onSaveAppSettings={async (data) => {
+          const updated = await api.updateAppSettings(data);
+          setAppSettings(updated);
+        }}
+        onCompleteOnboarding={() => {
+          setShowOnboarding(false);
+          setActiveTab('dashboard');
+        }}
+      />
+    );
   }
 
   return (
