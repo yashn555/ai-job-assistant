@@ -1,4 +1,9 @@
+import sys
 import os
+
+# Add root directory to sys.path so backend package imports work in all execution modes
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+
 import json
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +13,7 @@ from backend.database.db import engine, Base, SessionLocal, apply_migrations
 from backend.models.models import CandidateProfile, AppSettings, Application, User
 from backend.routes import jobs, applications, settings, auth, support
 from backend.routes.auth import hash_password
+
 
 # Initialize DB tables & migrations
 Base.metadata.create_all(bind=engine)
