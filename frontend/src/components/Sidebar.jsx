@@ -9,6 +9,7 @@ import {
   Sparkles,
   Bot,
   HelpCircle,
+  User,
   X
 } from 'lucide-react';
 
@@ -16,12 +17,14 @@ export default function Sidebar({ activeTab, setActiveTab, counts, user, isMobil
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, count: null },
     { id: 'new', label: 'New Applications', icon: FilePlus, count: null },
+    { id: 'profile', label: 'Candidate Profile', icon: User, count: null },
     { id: 'parsed', label: 'Parsed Jobs', icon: Briefcase, count: counts.parsed || 0 },
     { id: 'sent', label: 'Sent Applications', icon: Send, count: counts.sent || 0, badgeColor: 'badge-sent' },
     { id: 'failed', label: 'Failed Applications', icon: AlertCircle, count: counts.failed || 0, badgeColor: 'badge-failed' },
     { id: 'support', label: 'User Support', icon: HelpCircle, count: null },
-    { id: 'settings', label: 'Settings', icon: Settings, count: null },
+    { id: 'settings', label: 'Edit Settings', icon: Settings, count: null },
   ];
+
 
   const getInitials = (name) => {
     if (!name) return 'U';

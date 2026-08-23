@@ -6,6 +6,7 @@ import LoginPage from './pages/LoginPage';
 
 import Dashboard from './pages/Dashboard';
 import ApplicationsPage from './pages/ApplicationsPage';
+import ProfilePage from './pages/ProfilePage';
 import SettingsPage from './pages/SettingsPage';
 import SupportPage from './pages/SupportPage';
 
@@ -274,11 +275,12 @@ export default function App() {
   const tabTitles = {
     dashboard: 'Dashboard',
     new: 'New Job Application',
+    profile: 'Candidate Information & Resume',
     parsed: 'Parsed Job Opportunities',
     sent: 'Sent Applications',
     failed: 'Failed Applications',
     support: 'User Support & Help Center',
-    settings: 'Candidate Profile & Credentials'
+    settings: 'Edit Candidate Profile & Credentials'
   };
 
   if (isAuthLoading) {
@@ -327,6 +329,15 @@ export default function App() {
             isParsing={isParsing}
             isBatchSending={isBatchSending}
             sendingIds={sendingIds}
+          />
+        )}
+
+        {activeTab === 'profile' && (
+          <ProfilePage
+            user={user}
+            profile={profile}
+            appSettings={appSettings}
+            onNavigateToEdit={() => setActiveTab('settings')}
           />
         )}
 
