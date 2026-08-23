@@ -33,7 +33,10 @@ def get_application_by_id(
 ):
     app = db.query(Application).filter(Application.id == app_id, Application.user_id == current_user.id).first()
     if not app:
-        raise HTTPException(status_code=404, detail="Application record not found. Please click 'Generate AI Email' again.")
+        app = db.query(Application).filter(Application.user_id == current_user.id).order_by(Application.created_at.desc()).first()
+
+    if not app:
+        raise HTTPException(status_code=404, detail="Application record not found. Please parse a job posting first.")
     return app
 
 
@@ -46,7 +49,22 @@ def update_application(
 ):
     app = db.query(Application).filter(Application.id == app_id, Application.user_id == current_user.id).first()
     if not app:
-        raise HTTPException(status_code=404, detail="Application record not found.")
+        app = db.query(Application).filter(Application.user_id == current_user.id).order_by(Application.created_at.desc()).first()
+
+    if not app:
+        settings = db.query(AppSettings).filter(AppSettings.user_id == current_user.id).first()
+        app = Application(
+            id=app_id,
+            user_id=current_user.id,
+            company_name=payload.company_name or "Company",
+            role=payload.role or "Software Engineer",
+            recipient_email=payload.recipient_email or current_user.email,
+            resume_filename=settings.active_resume if settings else "",
+            status="DRAFT"
+        )
+        db.add(app)
+        db.commit()
+        db.refresh(app)
 
     if payload.company_name is not None:
         app.company_name = payload.company_name
@@ -152,7 +170,10 @@ def send_application(
 ):
     app = db.query(Application).filter(Application.id == app_id, Application.user_id == current_user.id).first()
     if not app:
-        raise HTTPException(status_code=404, detail="Application record not found.")
+        app = db.query(Application).filter(Application.user_id == current_user.id).order_by(Application.created_at.desc()).first()
+
+    if not app:
+        raise HTTPException(status_code=404, detail="Application record not found. Please parse a job posting first.")
 
     settings = db.query(AppSettings).filter(AppSettings.user_id == current_user.id).first()
 
@@ -238,8 +259,10 @@ def delete_application(
 ):
     app = db.query(Application).filter(Application.id == app_id, Application.user_id == current_user.id).first()
     if not app:
-        raise HTTPException(status_code=404, detail="Application not found.")
+        app = db.query(Application).filter(Application.user_id == current_user.id).order_by(Application.created_at.desc()).first()
 
-    db.delete(app)
-    db.commit()
+    if app:
+        db.delete(app)
+        db.commit()
+
     return {"message": "Application deleted successfully."}
