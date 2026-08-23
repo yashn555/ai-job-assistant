@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import EmailPreviewModal from './components/EmailPreviewModal';
-import AuthModal from './components/AuthModal';
+import LoginPage from './pages/LoginPage';
 
 import Dashboard from './pages/Dashboard';
 import ApplicationsPage from './pages/ApplicationsPage';
@@ -16,7 +16,6 @@ window.api = api;
 export default function App() {
   const [user, setUser] = useState(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
-  const [showAuthModal, setShowAuthModal] = useState(false);
 
   const [activeTab, setActiveTab] = useState('dashboard');
   const [applications, setApplications] = useState([]);
@@ -39,13 +38,11 @@ export default function App() {
     checkAuth();
   }, []);
 
-
   const checkAuth = async () => {
     setIsAuthLoading(true);
     const token = localStorage.getItem('job_assistant_token');
     if (!token) {
       setUser(null);
-      setShowAuthModal(true);
       setIsAuthLoading(false);
       return;
     }
@@ -53,19 +50,15 @@ export default function App() {
     try {
       const currentUser = await api.getMe();
       setUser(currentUser);
-      setShowAuthModal(false);
       await loadData();
     } catch (err) {
       console.warn('Initial session check:', err.message);
       api.logout();
       setUser(null);
-      setShowAuthModal(true);
     } finally {
       setIsAuthLoading(false);
     }
   };
-
-
 
   const loadData = async () => {
     try {
@@ -86,14 +79,12 @@ export default function App() {
 
   const handleAuthSuccess = (userData) => {
     setUser(userData);
-    setShowAuthModal(false);
     loadData();
   };
 
   const handleLogout = () => {
     api.logout();
     setUser(null);
-    setShowAuthModal(true);
     setApplications([]);
     setProfile(null);
     setAppSettings(null);
@@ -298,6 +289,10 @@ export default function App() {
     );
   }
 
+  if (!user) {
+    return <LoginPage onAuthSuccess={handleAuthSuccess} />;
+  }
+
   return (
     <div className="app-container">
       <Sidebar
@@ -374,12 +369,6 @@ export default function App() {
         isRegenerating={isRegenerating}
         sendingIds={sendingIds}
       />
-
-      <AuthModal
-        isOpen={showAuthModal}
-        onAuthSuccess={handleAuthSuccess}
-      />
     </div>
   );
 }
-
