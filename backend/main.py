@@ -15,42 +15,6 @@ from backend.routes import jobs, applications, settings, auth, support
 from backend.routes.auth import hash_password
 
 
-# Initialize DB tables & migrations
-Base.metadata.create_all(bind=engine)
-apply_migrations()
-
-
-app = FastAPI(
-    title="AI Job Application Assistant API",
-    version="1.0.0",
-    description="Backend service for job description parsing, Nemotron AI email generation, and SMTP application sending."
-)
-
-# CORS configuration
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-from backend.services.resume_service import get_upload_dir
-
-# Mount Uploads directory
-uploads_dir = get_upload_dir()
-app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
-
-
-# Include Routers
-app.include_router(auth.router)
-app.include_router(jobs.router)
-app.include_router(applications.router)
-app.include_router(settings.router)
-app.include_router(support.router)
-
-
-@app.on_event("startup")
 def seed_initial_data():
     """
     Seeds initial candidate profile (Yash Nagapure), default user account, and settings if missing.
@@ -120,8 +84,49 @@ def seed_initial_data():
             app_setting.user_id = user.id
 
         db.commit()
+    except Exception as e:
+        print(f"Seed notice: {e}")
     finally:
         db.close()
+
+
+# Initialize DB tables, migrations & seed directly on module load
+try:
+    Base.metadata.create_all(bind=engine)
+    apply_migrations()
+    seed_initial_data()
+except Exception as e:
+    print(f"DB Init Exception: {e}")
+
+
+app = FastAPI(
+    title="AI Job Application Assistant API",
+    version="1.0.0",
+    description="Backend service for job description parsing, Nemotron AI email generation, and SMTP application sending."
+)
+
+# CORS configuration
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+from backend.services.resume_service import get_upload_dir
+
+# Mount Uploads directory
+uploads_dir = get_upload_dir()
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
+
+# Include Routers
+app.include_router(auth.router)
+app.include_router(jobs.router)
+app.include_router(applications.router)
+app.include_router(settings.router)
+app.include_router(support.router)
 
 
 @app.get("/api/health")
@@ -136,4 +141,5 @@ def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
+
 
