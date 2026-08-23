@@ -5,10 +5,23 @@ from typing import Optional, List, Dict, Any
 
 logger = logging.getLogger(__name__)
 
-# Detect Vercel environment
-is_vercel = os.getenv("VERCEL") == "1" or os.getenv("VERCEL_ENV") is not None
+# Detect Vercel or read-only environment
+is_vercel = os.getenv("VERCEL") == "1" or os.getenv("VERCEL_ENV") is not None or os.getenv("AWS_LAMBDA_FUNCTION_NAME") is not None
 
-if is_vercel:
+is_writable = False
+if not is_vercel:
+    try:
+        test_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "uploads"))
+        os.makedirs(test_dir, exist_ok=True)
+        test_file = os.path.join(test_dir, ".writable_test")
+        with open(test_file, "w") as f:
+            f.write("ok")
+        os.remove(test_file)
+        is_writable = True
+    except Exception:
+        is_writable = False
+
+if is_vercel or not is_writable:
     UPLOAD_DIR = "/tmp/uploads"
 else:
     UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "uploads"))
@@ -16,6 +29,7 @@ else:
 def get_upload_dir() -> str:
     os.makedirs(UPLOAD_DIR, exist_ok=True)
     return UPLOAD_DIR
+
 
 def save_resume_file(file_bytes: bytes, filename: str) -> str:
     target_dir = get_upload_dir()

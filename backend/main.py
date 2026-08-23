@@ -35,10 +35,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from backend.services.resume_service import get_upload_dir
+
 # Mount Uploads directory
-uploads_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads"))
-os.makedirs(uploads_dir, exist_ok=True)
+uploads_dir = get_upload_dir()
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
 
 # Include Routers
 app.include_router(auth.router)
