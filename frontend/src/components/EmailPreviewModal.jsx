@@ -9,7 +9,8 @@ import {
   Briefcase, 
   Mail, 
   FileText,
-  Loader2
+  Loader2,
+  Sparkles
 } from 'lucide-react';
 
 export default function EmailPreviewModal({ 
@@ -24,18 +25,20 @@ export default function EmailPreviewModal({
 }) {
   if (!isOpen || !app) return null;
 
+  const defaultTemplateBody = `Dear Hiring Team,\n\nI am writing to apply for the position of ${app?.role || 'Software Engineer'} at ${app?.company_name || 'your company'}.\n\nI bring a strong background in software development and technical problem solving. I am eager to contribute my technical capabilities and dedication to your engineering team.\n\nPlease find my resume attached for your consideration. I would welcome the opportunity to discuss how my background aligns with your team's goals.\n\nThank you for your time and consideration.\n\nBest regards,\nCandidate`;
+
   const [companyName, setCompanyName] = useState(app.company_name || '');
   const [role, setRole] = useState(app.role || '');
   const [recipientEmail, setRecipientEmail] = useState(app.recipient_email || '');
-  const [subject, setSubject] = useState(app.generated_subject || app.explicit_subject || `Application for ${app.role || 'Role'} - Yash Nagapure`);
-  const [body, setBody] = useState(app.generated_email || '');
+  const [subject, setSubject] = useState(app.generated_subject || app.explicit_subject || `Application for ${app.role || 'Software Engineer'}`);
+  const [body, setBody] = useState(app.generated_email || defaultTemplateBody);
 
   useEffect(() => {
     setCompanyName(app.company_name || '');
     setRole(app.role || '');
     setRecipientEmail(app.recipient_email || '');
-    setSubject(app.generated_subject || app.explicit_subject || `Application for ${app.role || 'Role'} - Yash Nagapure`);
-    setBody(app.generated_email || '');
+    setSubject(app.generated_subject || app.explicit_subject || `Application for ${app.role || 'Software Engineer'}`);
+    setBody(app.generated_email || defaultTemplateBody);
   }, [app]);
 
   const handleSave = () => {
@@ -50,7 +53,6 @@ export default function EmailPreviewModal({
   };
 
   const handleSendSubmit = () => {
-    // First save updates, then send
     onSave(app.id, {
       company_name: companyName,
       role,
@@ -64,7 +66,31 @@ export default function EmailPreviewModal({
 
   return (
     <div className="modal-overlay">
-      <div className="modal-content">
+      <div className="modal-content" style={{ position: 'relative' }}>
+        {/* Loading Spinner Overlay when AI is Generating */}
+        {isRegenerating && (
+          <div style={{
+            position: 'absolute',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.85)',
+            zIndex: 100,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '12px',
+            borderRadius: '16px'
+          }}>
+            <Loader2 size={36} color="var(--accent-primary)" className="animate-spin" />
+            <div style={{ fontSize: '1.05rem', fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Sparkles size={18} color="#f59e0b" /> AI is Crafting Personalized Email...
+            </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+              Analyzing job requirements and matching skills...
+            </p>
+          </div>
+        )}
+
         {/* Modal Header */}
         <div className="modal-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -149,7 +175,7 @@ export default function EmailPreviewModal({
               }}>
                 <Paperclip size={14} color="#6366f1" />
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {app.resume_filename || 'Yash_Nagapure_Resume.pdf'}
+                  {app.resume_filename || 'Active Resume Attached'}
                 </span>
               </div>
             </div>
@@ -200,7 +226,7 @@ export default function EmailPreviewModal({
             onClick={() => onRegenerate(app.id)}
             disabled={isRegenerating}
           >
-            {isRegenerating ? <Loader2 size={14} className="animate-pulse" /> : <RefreshCw size={14} />}
+            {isRegenerating ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
             Regenerate Email
           </button>
 
@@ -218,7 +244,7 @@ export default function EmailPreviewModal({
             onClick={handleSendSubmit}
             disabled={!recipientEmail || isSending}
           >
-            {isSending ? <Loader2 size={14} className="animate-pulse" /> : <Send size={14} />}
+            {isSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
             Send Application
           </button>
         </div>

@@ -20,7 +20,6 @@ def get_openai_client() -> Optional[OpenAI]:
     if not api_key:
         return None
     try:
-        # Fast timeout to prevent application lag or hanging
         return OpenAI(base_url=NVIDIA_BASE_URL, api_key=api_key, timeout=3.0)
     except Exception as e:
         logger.error(f"Failed to instantiate OpenAI client for Nemotron: {e}")
@@ -31,7 +30,6 @@ def sanitize_email_body(body: str) -> str:
     """Strips any redundant Subject: header line from the message body."""
     if not body:
         return ""
-    # Strip leading 'Subject: ...' or 'Subject Line: ...'
     cleaned = re.sub(r'(?i)^\s*Subject(?:\s*Line)?\s*[:\-].*?\n+', '', body.strip())
     return cleaned.strip()
 
@@ -41,7 +39,7 @@ def generate_email_content(job: ExtractedJob, candidate_profile: Dict[str, Any])
     Generates a personalized application email body and subject.
     Fast fallback to deterministic template generator if API fails or times out.
     """
-    cand_name = candidate_profile.get("name", "Yash Nagapure")
+    cand_name = candidate_profile.get("name") or "Candidate"
     exp = job.experience or "Fresher"
 
     # Clean up company & role names
@@ -51,7 +49,7 @@ def generate_email_content(job: ExtractedJob, candidate_profile: Dict[str, Any])
     if not job.company_name:
         job.company_name = "your company"
     if not job.role:
-        job.role = "Software Developer"
+        job.role = "Software Engineer"
 
     if job.explicit_subject and job.explicit_subject.strip():
         subject = job.explicit_subject.strip()
@@ -64,19 +62,28 @@ def generate_email_content(job: ExtractedJob, candidate_profile: Dict[str, Any])
         return {"subject": subject, "body": sanitize_email_body(email_body)}
 
     try:
-        degree = candidate_profile.get("degree", "B.Tech Computer Science Engineering")
-        college = candidate_profile.get("college", "AISSMS IOIT, Pune")
-        grad_year = candidate_profile.get("graduation_year", "2027")
-        cand_email = candidate_profile.get("email", "yashnagapure25@gmail.com")
+        degree = candidate_profile.get("degree") or ""
+        college = candidate_profile.get("college") or ""
+        grad_year = candidate_profile.get("graduation_year") or ""
+        cand_email = candidate_profile.get("email") or ""
         skills = candidate_profile.get("skills", [])
         projects = candidate_profile.get("projects", [])
 
-        linkedin = candidate_profile.get("linkedin_url", "https://linkedin.com/in/yashnagapure")
-        github = candidate_profile.get("github_url", "https://github.com/yashnagapure")
-        portfolio = candidate_profile.get("portfolio_url", "https://yashnagapure.dev")
+        linkedin = candidate_profile.get("linkedin_url") or ""
+        github = candidate_profile.get("github_url") or ""
+        portfolio = candidate_profile.get("portfolio_url") or ""
 
         skills_str = ", ".join(skills) if isinstance(skills, list) else str(skills)
         projects_str = ", ".join(projects) if isinstance(projects, list) else str(projects)
+
+        signature_lines = ["Best regards,", cand_name]
+        if degree or college:
+            sig_deg = f"{degree} - {college}".strip(" -")
+            signature_lines.append(sig_deg)
+        if linkedin: signature_lines.append(f"LinkedIn: {linkedin}")
+        if github: signature_lines.append(f"GitHub: {github}")
+        if portfolio: signature_lines.append(f"Portfolio: {portfolio}")
+        signature_block = "\n".join(signature_lines)
 
         system_prompt = (
             "You are generating a highly tailored, professional job application email for a real candidate.\n"
@@ -84,15 +91,9 @@ def generate_email_content(job: ExtractedJob, candidate_profile: Dict[str, Any])
             "1. Match the job description requirements against the candidate's actual skills. Mention ONLY skills the candidate possesses.\n"
             "2. Do NOT include any 'Subject:' line inside the body text. Start directly with 'Dear Hiring Team,' or 'Dear Hiring Manager,'.\n"
             "3. Ensure the role and company name are clean. NEVER include emojis, promotional headers ('FREE JOB ALERT'), or messy text in the email.\n"
-            "4. Keep the email professional, natural, concise, and suitable for a fresher/graduating student.\n"
+            "4. Keep the email professional, natural, concise, and suitable for a software developer candidate.\n"
             "5. Format the bottom signature EXACTLY as follows:\n"
-            "Best regards,\n"
-            f"{cand_name}\n"
-            f"{degree}\n"
-            f"{college}\n"
-            f"LinkedIn: {linkedin}\n"
-            f"GitHub: {github}\n"
-            f"Portfolio: {portfolio}\n\n"
+            f"{signature_block}\n\n"
             "Return ONLY the plain text email body."
         )
 
@@ -132,20 +133,19 @@ Generate the clean application email body:"""
 
 
 def generate_template_email(job: ExtractedJob, candidate_profile: Dict[str, Any]) -> str:
-    cand_name = candidate_profile.get("name", "Yash Nagapure")
-    degree = candidate_profile.get("degree", "B.Tech Computer Science Engineering")
-    college = candidate_profile.get("college", "AISSMS IOIT, Pune")
-    grad_year = candidate_profile.get("graduation_year", "2027")
+    cand_name = candidate_profile.get("name") or "Candidate"
+    degree = candidate_profile.get("degree") or ""
+    college = candidate_profile.get("college") or ""
+    grad_year = candidate_profile.get("graduation_year") or ""
 
-    linkedin = candidate_profile.get("linkedin_url", "https://linkedin.com/in/yashnagapure")
-    github = candidate_profile.get("github_url", "https://github.com/yashnagapure")
-    portfolio = candidate_profile.get("portfolio_url", "https://yashnagapure.dev")
+    linkedin = candidate_profile.get("linkedin_url") or ""
+    github = candidate_profile.get("github_url") or ""
+    portfolio = candidate_profile.get("portfolio_url") or ""
 
     company = job.company_name or "your company"
-    role = job.role or "Software Developer"
+    role = job.role or "Software Engineer"
     exp = job.experience or "Fresher"
 
-    # Match ONLY relevant skills candidate actually possesses
     cand_skills = candidate_profile.get("skills", [])
     matched_skills = []
     if isinstance(cand_skills, list):
@@ -157,27 +157,12 @@ def generate_template_email(job: ExtractedJob, candidate_profile: Dict[str, Any]
     if not matched_skills and isinstance(cand_skills, list):
         matched_skills = cand_skills[:5]
 
-    matched_skills_str = ", ".join(matched_skills[:6]) if matched_skills else "Python, SQL, JavaScript"
+    matched_skills_str = ", ".join(matched_skills[:6]) if matched_skills else "Python, JavaScript, SQL, React"
 
-    if "analyst" in role.lower() or "data" in role.lower():
-        project_mention = "I have hands-on experience in data analysis, SQL database queries, data reporting, and Python scripting, along with building projects like DocuForge AI."
-        interest_mention = "I am particularly interested in data analysis and reporting because I enjoy extracting actionable insights from data to solve business problems."
-    elif "ai" in role.lower() or "automation" in role.lower() or "ml" in role.lower():
-        project_mention = "I have hands-on experience building DocuForge AI, an AI-powered document generation platform, alongside Face Recognition Attendance System."
-        interest_mention = "I am particularly interested in AI automation because I enjoy combining software development, APIs, and AI to automate repetitive processes."
-    elif "backend" in role.lower() or "node" in role.lower() or "python" in role.lower():
-        project_mention = "I have developed full-stack and backend projects such as Hotel Mitraya and Travel-Friend utilizing Node.js, Express.js, REST APIs, and databases."
-        interest_mention = "I am passionate about backend engineering, REST API integration, and clean data architectures."
-    else:
-        project_mention = "I have hands-on experience building web and software applications including DocuForge AI and Travel-Friend."
-        interest_mention = "I am passionate about software engineering and eager to contribute to real-world development initiatives."
-
-    signature_lines = [
-        "Best regards,",
-        cand_name,
-        f"{degree}",
-        f"{college}",
-    ]
+    signature_lines = ["Best regards,", cand_name]
+    if degree or college:
+        sig_deg = f"{degree} - {college}".strip(" -")
+        signature_lines.append(sig_deg)
     if linkedin: signature_lines.append(f"LinkedIn: {linkedin}")
     if github: signature_lines.append(f"GitHub: {github}")
     if portfolio: signature_lines.append(f"Portfolio: {portfolio}")
@@ -187,13 +172,9 @@ def generate_template_email(job: ExtractedJob, candidate_profile: Dict[str, Any]
 
 I am writing to apply for the {role} position at {company}.
 
-I am a final-year {degree} student at {college}, graduating in {grad_year}. I have a strong technical foundation in software development and practical experience in {matched_skills_str}.
+I bring a strong background in software development with hands-on skills in {matched_skills_str}. I am eager to contribute my technical problem-solving capabilities, fast-learning mindset, and dedication to your engineering team at {company}.
 
-{project_mention}
-
-{interest_mention} As a {exp.lower() if exp and exp != 'Fresher' else 'fresher'}, I bring a strong problem-solving mindset, technical dedication, and a fast-learning approach.
-
-Please find my resume attached for your consideration. I would appreciate the opportunity to contribute to your team at {company}.
+Please find my resume attached for your review. I would welcome the opportunity to discuss how my background aligns with the goals of {company}.
 
 Thank you for your time and consideration.
 
@@ -227,7 +208,7 @@ Return ONLY a JSON array of objects with keys: "company_name", "role", "experien
             for item in items:
                 extracted.append(ExtractedJob(
                     company_name=item.get("company_name", "Company"),
-                    role=item.get("role", "Software Developer"),
+                    role=item.get("role", "Software Engineer"),
                     experience=item.get("experience", "Fresher"),
                     recipient_email=item.get("recipient_email"),
                     job_description=text_chunk,
