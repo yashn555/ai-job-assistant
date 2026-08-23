@@ -42,19 +42,29 @@ export default function App() {
 
   const checkAuth = async () => {
     setIsAuthLoading(true);
+    const token = localStorage.getItem('job_assistant_token');
+    if (!token) {
+      setUser(null);
+      setShowAuthModal(true);
+      setIsAuthLoading(false);
+      return;
+    }
+
     try {
       const currentUser = await api.getMe();
       setUser(currentUser);
       setShowAuthModal(false);
       await loadData();
     } catch (err) {
-      console.warn('Authentication check notice:', err.message);
+      console.warn('Initial session check:', err.message);
+      api.logout();
       setUser(null);
       setShowAuthModal(true);
     } finally {
       setIsAuthLoading(false);
     }
   };
+
 
 
   const loadData = async () => {
