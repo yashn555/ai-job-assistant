@@ -21,13 +21,16 @@ def create_token(user_id: int) -> str:
     return token_data
 
 def decode_token(token: str) -> Optional[int]:
-    if not token or not token.startswith("token_"):
+    if not token:
+        return None
+    token_clean = token.strip().strip('"').strip("'")
+    if not token_clean.startswith("token_"):
         return None
     try:
-        parts = token.split("_")
+        parts = token_clean.split("_")
         user_id = int(parts[1])
         expected = f"token_{user_id}_{hash_password(str(user_id))[:12]}"
-        if token == expected:
+        if token_clean == expected:
             return user_id
     except Exception:
         return None
@@ -40,29 +43,25 @@ def get_current_user(
 ) -> User:
     token = None
     if authorization:
-        if authorization.startswith("Bearer "):
-            token = authorization.split(" ")[1]
-        else:
-            token = authorization
+        token = authorization.replace("Bearer ", "").strip().strip('"').strip("'")
     elif x_user_token:
-        token = x_user_token
+        token = x_user_token.strip().strip('"').strip("'")
 
     user_id = decode_token(token) if token else None
     if not user_id:
-        # Fallback to default user 1 if database has default user and no token provided in open endpoints,
-        # but for protected user actions, raise 401
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Authentication token is missing or invalid. Please log in."
+            detail="Session expired or invalid. Please log in."
         )
 
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User account not found."
+            detail="Session expired. Please log in again."
         )
     return user
+
 
 def get_optional_user(
     authorization: Optional[str] = Header(None),

@@ -33,6 +33,7 @@ const GithubIcon = () => (
 );
 
 export default function ProfileForm({ 
+  user,
   profile, 
   appSettings, 
   resumesList,
@@ -42,23 +43,23 @@ export default function ProfileForm({
   onDeleteResume,
   onTestEmail
 }) {
-  const [name, setName] = useState(profile?.name || 'Yash Nagapure');
-  const [email, setEmail] = useState(profile?.email || 'yashnagapure25@gmail.com');
-  const [degree, setDegree] = useState(profile?.degree || 'B.Tech Computer Science Engineering');
-  const [college, setCollege] = useState(profile?.college || 'AISSMS IOIT, Pune');
-  const [graduationYear, setGraduationYear] = useState(profile?.graduation_year || '2027');
-  const [linkedin, setLinkedin] = useState(profile?.linkedin_url || 'https://linkedin.com/in/yashnagapure');
-  const [github, setGithub] = useState(profile?.github_url || 'https://github.com/yashnagapure');
-  const [portfolio, setPortfolio] = useState(profile?.portfolio_url || 'https://yashnagapure.dev');
+  const [name, setName] = useState(profile?.name || user?.name || '');
+  const [email, setEmail] = useState(profile?.email || user?.email || '');
+  const [degree, setDegree] = useState(profile?.degree || '');
+  const [college, setCollege] = useState(profile?.college || '');
+  const [graduationYear, setGraduationYear] = useState(profile?.graduation_year || '');
+  const [linkedin, setLinkedin] = useState(profile?.linkedin_url || '');
+  const [github, setGithub] = useState(profile?.github_url || '');
+  const [portfolio, setPortfolio] = useState(profile?.portfolio_url || '');
   const [skillsText, setSkillsText] = useState((profile?.skills || []).join(', '));
   const [projectsText, setProjectsText] = useState((profile?.projects || []).join(', '));
   const [bio, setBio] = useState(profile?.bio || '');
 
   const [smtpHost, setSmtpHost] = useState(appSettings?.smtp_host || 'smtp.gmail.com');
   const [smtpPort, setSmtpPort] = useState(appSettings?.smtp_port || 587);
-  const [smtpUsername, setSmtpUsername] = useState(appSettings?.smtp_username || 'yashnagapure25@gmail.com');
-  const [smtpPassword, setSmtpPassword] = useState(appSettings?.smtp_password || 'awmtyyfozljwmbvu');
-  const [senderEmail, setSenderEmail] = useState(appSettings?.sender_email || 'yashnagapure25@gmail.com');
+  const [smtpUsername, setSmtpUsername] = useState(appSettings?.smtp_username || user?.email || '');
+  const [smtpPassword, setSmtpPassword] = useState(appSettings?.smtp_password || user?.app_password || '');
+  const [senderEmail, setSenderEmail] = useState(appSettings?.sender_email || user?.email || '');
 
   const [testRecipient, setTestRecipient] = useState('');
   const [isTesting, setIsTesting] = useState(false);
@@ -69,8 +70,8 @@ export default function ProfileForm({
 
   useEffect(() => {
     if (profile) {
-      setName(profile.name || '');
-      setEmail(profile.email || 'yashnagapure25@gmail.com');
+      setName(profile.name || user?.name || '');
+      setEmail(profile.email || user?.email || '');
       setDegree(profile.degree || '');
       setCollege(profile.college || '');
       setGraduationYear(profile.graduation_year || '');
@@ -81,17 +82,17 @@ export default function ProfileForm({
       setProjectsText((profile.projects || []).join(', '));
       setBio(profile.bio || '');
     }
-  }, [profile]);
+  }, [profile, user]);
 
   useEffect(() => {
     if (appSettings) {
       setSmtpHost(appSettings.smtp_host || 'smtp.gmail.com');
       setSmtpPort(appSettings.smtp_port || 587);
-      setSmtpUsername(appSettings.smtp_username || 'yashnagapure25@gmail.com');
-      setSmtpPassword(appSettings.smtp_password || 'awmtyyfozljwmbvu');
-      setSenderEmail(appSettings.sender_email || 'yashnagapure25@gmail.com');
+      setSmtpUsername(appSettings.smtp_username || user?.email || '');
+      setSmtpPassword(appSettings.smtp_password || user?.app_password || '');
+      setSenderEmail(appSettings.sender_email || user?.email || '');
     }
-  }, [appSettings]);
+  }, [appSettings, user]);
 
   const handleSaveAll = (e) => {
     e.preventDefault();
@@ -119,7 +120,7 @@ export default function ProfileForm({
       smtp_password: smtpPassword,
       sender_email: senderEmail || smtpUsername,
       auto_send: appSettings?.auto_send || false,
-      active_resume: appSettings?.active_resume
+      active_resume: appSettings?.active_resume || ''
     });
 
     setSavedSuccess(true);
@@ -186,9 +187,9 @@ export default function ProfileForm({
               <input
                 type="text"
                 className="form-input"
+                placeholder="e.g. B.Tech Computer Science Engineering"
                 value={degree}
                 onChange={(e) => setDegree(e.target.value)}
-                required
               />
             </div>
 
@@ -197,9 +198,9 @@ export default function ProfileForm({
               <input
                 type="text"
                 className="form-input"
+                placeholder="e.g. 2026"
                 value={graduationYear}
                 onChange={(e) => setGraduationYear(e.target.value)}
-                required
               />
             </div>
           </div>
@@ -209,9 +210,9 @@ export default function ProfileForm({
             <input
               type="text"
               className="form-input"
+              placeholder="e.g. University / College Name"
               value={college}
               onChange={(e) => setCollege(e.target.value)}
-              required
             />
           </div>
 
@@ -257,7 +258,7 @@ export default function ProfileForm({
             </div>
           </div>
 
-          {/* Technical Skills Strict Note */}
+          {/* Technical Skills Note */}
           <div className="form-group">
             <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span><Code size={14} style={{ display: 'inline', marginRight: '4px' }} /> Technical Skills (Possessed)</span>
@@ -281,7 +282,7 @@ export default function ProfileForm({
               rows={2}
               value={projectsText}
               onChange={(e) => setProjectsText(e.target.value)}
-              placeholder="DocuForge AI, Travel-Friend, Hotel Mitraya..."
+              placeholder="List key projects you have built..."
             />
           </div>
         </div>
@@ -305,7 +306,7 @@ export default function ProfileForm({
               <FileText size={28} color="#6366f1" />
               <div>
                 <strong style={{ fontSize: '0.92rem', color: 'var(--text-primary)' }}>
-                  Active Resume: {appSettings?.active_resume || 'Yash_Nagapure_Resume.pdf'}
+                  Active Resume: {appSettings?.active_resume || 'None uploaded'}
                 </strong>
                 <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                   Automatically attached to outgoing emails.
@@ -378,6 +379,7 @@ export default function ProfileForm({
               <input
                 type="password"
                 className="form-input"
+                placeholder="16-character Gmail App Password"
                 value={smtpPassword}
                 onChange={(e) => setSmtpPassword(e.target.value)}
                 required
@@ -392,7 +394,7 @@ export default function ProfileForm({
               <input
                 type="email"
                 className="form-input"
-                placeholder="Send test email to (e.g. yashnagapure25@gmail.com)..."
+                placeholder="Send test email to (e.g. recipient@example.com)..."
                 value={testRecipient}
                 onChange={(e) => setTestRecipient(e.target.value)}
                 style={{ flex: 1 }}

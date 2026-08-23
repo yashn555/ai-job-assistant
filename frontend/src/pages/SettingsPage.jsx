@@ -2,6 +2,7 @@ import React from 'react';
 import ProfileForm from '../components/ProfileForm';
 
 export default function SettingsPage({
+  user,
   profile,
   appSettings,
   resumesList,
@@ -21,6 +22,7 @@ export default function SettingsPage({
       </div>
 
       <ProfileForm
+        user={user}
         profile={profile}
         appSettings={appSettings}
         resumesList={resumesList}

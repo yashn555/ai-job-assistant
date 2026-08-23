@@ -351,6 +351,7 @@ export default function App() {
 
         {activeTab === 'settings' && (
           <SettingsPage
+            user={user}
             profile={profile}
             appSettings={appSettings}
             resumesList={resumesList}
