@@ -26,7 +26,6 @@ def validate_email_send_request(
 ) -> Tuple[bool, str]:
     """
     Validates all required fields before attempting to send an application email.
-    Matches Rule 13 specifications.
     """
     if not recipient_email or not recipient_email.strip():
         return False, "Cannot send application: recipient email was not detected or is empty."
@@ -47,10 +46,6 @@ def validate_email_send_request(
     if not body or not body.strip():
         return False, "Cannot send application: missing email body."
 
-    resume_path = get_resume_path(resume_filename)
-    if not resume_path or not os.path.exists(resume_path):
-        return False, "Cannot send application: uploaded resume file was not found."
-
     return True, ""
 
 
@@ -62,25 +57,22 @@ def send_application_email(
     smtp_settings: Optional[Dict[str, Any]] = None
 ) -> Tuple[bool, str]:
     """
-    Sends the email with attached resume using Python smtplib.
+    Sends the email with optional attached resume using Python smtplib.
+    Uses ONLY user-configured SMTP credentials without env fallback.
     """
-    # 1. Fetch SMTP Credentials from passed settings or environment
-    smtp_host = (smtp_settings and smtp_settings.get("smtp_host")) or os.getenv("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int((smtp_settings and smtp_settings.get("smtp_port")) or os.getenv("SMTP_PORT", 587))
-    smtp_user = (smtp_settings and smtp_settings.get("smtp_username")) or os.getenv("SMTP_USERNAME", "")
-    smtp_pass = (smtp_settings and smtp_settings.get("smtp_password")) or os.getenv("SMTP_PASSWORD", "")
-    sender_email = (smtp_settings and smtp_settings.get("sender_email")) or os.getenv("SENDER_EMAIL", smtp_user)
+    if not smtp_settings:
+        return False, "SMTP configuration missing for current user."
+
+    smtp_host = smtp_settings.get("smtp_host") or "smtp.gmail.com"
+    smtp_port = int(smtp_settings.get("smtp_port") or 587)
+    smtp_user = smtp_settings.get("smtp_username")
+    smtp_pass = smtp_settings.get("smtp_password")
+    sender_email = smtp_settings.get("sender_email") or smtp_user
 
     if not smtp_user or not smtp_pass:
-        return False, "SMTP credentials not configured. Please set SMTP username and password in Settings."
-
-    # 2. Get resume attachment path
-    resume_path = get_resume_path(resume_filename)
-    if not resume_path or not os.path.exists(resume_path):
-        return False, "Resume file attachment not found."
+        return False, "Gmail Email or App Password is not configured for your user account. Please update App Settings."
 
     try:
-        # Create MIMEMultipart email
         msg = MIMEMultipart()
         msg['From'] = sender_email
         msg['To'] = recipient_email
@@ -89,15 +81,19 @@ def send_application_email(
         # Attach email body text
         msg.attach(MIMEText(body, 'plain'))
 
-        # Attach Resume File
-        attach_name = os.path.basename(resume_path)
-        with open(resume_path, "rb") as f:
-            part = MIMEApplication(f.read(), Name=attach_name)
-            part['Content-Disposition'] = f'attachment; filename="{attach_name}"'
-            msg.attach(part)
+        # Attach Resume File if specified and exists
+        if resume_filename:
+            resume_path = get_resume_path(resume_filename)
+            if resume_path and os.path.exists(resume_path):
+                attach_name = os.path.basename(resume_path)
+                with open(resume_path, "rb") as f:
+                    part = MIMEApplication(f.read(), Name=attach_name)
+                    part['Content-Disposition'] = f'attachment; filename="{attach_name}"'
+                    msg.attach(part)
+            else:
+                logger.warning(f"Resume file '{resume_filename}' not found on server. Sending email without attachment.")
 
-        # Connect and send via SMTP
-        logger.info(f"Connecting to SMTP server {smtp_host}:{smtp_port}...")
+        logger.info(f"Connecting to SMTP server {smtp_host}:{smtp_port} for user {smtp_user}...")
 
         if smtp_port == 465:
             server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=15)
@@ -111,11 +107,11 @@ def send_application_email(
         server.sendmail(sender_email, [recipient_email], msg.as_string())
         server.quit()
 
-        logger.info(f"Email successfully sent to {recipient_email}")
+        logger.info(f"Email successfully sent from {sender_email} to {recipient_email}")
         return True, "Email sent successfully."
 
     except smtplib.SMTPAuthenticationError:
-        return False, "SMTP Authentication Failed: Please check your SMTP username and App Password."
+        return False, "SMTP Authentication Failed: Please verify your Email and 16-character Gmail App Password (generated at myaccount.google.com/apppasswords)."
     except smtplib.SMTPConnectError:
         return False, f"SMTP Connection Failed: Could not connect to {smtp_host}:{smtp_port}."
     except Exception as e:
