@@ -53,15 +53,16 @@ export default function EmailPreviewModal({
   };
 
   const handleSendSubmit = () => {
-    onSave(app.id, {
+    const payload = {
       company_name: companyName,
       role,
       recipient_email: recipientEmail,
       generated_subject: subject,
       generated_email: body,
       status: 'REVIEWED'
-    });
-    onSend(app.id);
+    };
+    onSave(app.id, payload);
+    onSend(app.id, payload);
   };
 
   return (

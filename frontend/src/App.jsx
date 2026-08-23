@@ -152,10 +152,10 @@ export default function App() {
   };
 
   // Single Application Send
-  const handleSendApp = async (appId, overrideDuplicate = false) => {
+  const handleSendApp = async (appId, overrideDuplicate = false, appPayload = null) => {
     setSendingIds(prev => [...prev, appId]);
     try {
-      const sentApp = await api.sendApplication(appId, overrideDuplicate);
+      const sentApp = await api.sendApplication(appId, overrideDuplicate, appPayload);
       setApplications(prev => prev.map(a => a.id === sentApp.id ? sentApp : a));
       if (reviewApp && reviewApp.id === appId) {
         setReviewApp(null);
@@ -164,7 +164,7 @@ export default function App() {
     } catch (err) {
       if (err.message.includes('already sent') && !overrideDuplicate) {
         if (window.confirm(`${err.message}\nDo you want to manually override and send again?`)) {
-          handleSendApp(appId, true);
+          handleSendApp(appId, true, appPayload);
         }
       } else {
         alert(`Sending failed: ${err.message}`);
@@ -323,7 +323,7 @@ export default function App() {
             onUploadFile={handleUploadJobFile}
             onResumeUpload={handleUploadResume}
             onReviewEdit={(app) => setReviewApp(app)}
-            onSend={(app) => handleSendApp(app.id)}
+            onSend={(app) => handleSendApp(app.id, false, app)}
             onBatchSend={handleBatchSendAll}
             onSkip={handleSkipApp}
             isParsing={isParsing}
@@ -346,7 +346,7 @@ export default function App() {
             applications={applications}
             activeFilter={activeTab === 'parsed' ? 'DRAFT' : activeTab.toUpperCase()}
             onReviewEdit={(app) => setReviewApp(app)}
-            onSend={(app) => handleSendApp(app.id)}
+            onSend={(app) => handleSendApp(app.id, false, app)}
             onDelete={handleDeleteApp}
           />
         )}
@@ -376,7 +376,7 @@ export default function App() {
         onClose={() => setReviewApp(null)}
         onSave={handleSaveAppUpdates}
         onRegenerate={handleRegenerateEmail}
-        onSend={(appId) => handleSendApp(appId)}
+        onSend={(appId, appPayload) => handleSendApp(appId, false, appPayload)}
         isRegenerating={isRegenerating}
         sendingIds={sendingIds}
       />

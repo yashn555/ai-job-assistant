@@ -58,17 +58,28 @@ def update_profile(
         profile = CandidateProfile(user_id=current_user.id)
         db.add(profile)
 
-    profile.name = payload.name
-    profile.email = payload.email if payload.email else current_user.email
-    profile.degree = payload.degree
-    profile.college = payload.college
-    profile.graduation_year = payload.graduation_year
-    profile.linkedin_url = payload.linkedin_url
-    profile.github_url = payload.github_url
-    profile.portfolio_url = payload.portfolio_url
-    profile.skills_json = json.dumps(payload.skills)
-    profile.projects_json = json.dumps(payload.projects)
-    profile.bio = payload.bio
+    if payload.name is not None and payload.name != "":
+        profile.name = payload.name
+    if payload.email is not None and payload.email != "":
+        profile.email = payload.email
+    if payload.degree is not None:
+        profile.degree = payload.degree
+    if payload.college is not None:
+        profile.college = payload.college
+    if payload.graduation_year is not None:
+        profile.graduation_year = payload.graduation_year
+    if payload.linkedin_url is not None:
+        profile.linkedin_url = payload.linkedin_url
+    if payload.github_url is not None:
+        profile.github_url = payload.github_url
+    if payload.portfolio_url is not None:
+        profile.portfolio_url = payload.portfolio_url
+    if payload.skills is not None:
+        profile.skills_json = json.dumps(payload.skills)
+    if payload.projects is not None:
+        profile.projects_json = json.dumps(payload.projects)
+    if payload.bio is not None:
+        profile.bio = payload.bio
 
     db.commit()
     db.refresh(profile)
@@ -118,13 +129,19 @@ def update_app_settings(
         settings = AppSettings(user_id=current_user.id)
         db.add(settings)
 
-    settings.auto_send = payload.auto_send
-    settings.smtp_host = payload.smtp_host
-    settings.smtp_port = payload.smtp_port
-    settings.smtp_username = payload.smtp_username
-    settings.smtp_password = payload.smtp_password
-    settings.sender_email = payload.sender_email
-    if payload.active_resume:
+    if payload.auto_send is not None:
+        settings.auto_send = payload.auto_send
+    if payload.smtp_host is not None:
+        settings.smtp_host = payload.smtp_host
+    if payload.smtp_port is not None:
+        settings.smtp_port = payload.smtp_port
+    if payload.smtp_username is not None:
+        settings.smtp_username = payload.smtp_username
+    if payload.smtp_password is not None:
+        settings.smtp_password = payload.smtp_password
+    if payload.sender_email is not None:
+        settings.sender_email = payload.sender_email
+    if payload.active_resume is not None and payload.active_resume != "":
         settings.active_resume = payload.active_resume
 
     db.commit()

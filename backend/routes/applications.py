@@ -164,6 +164,7 @@ def batch_send_applications(
 @router.post("/{app_id}/send", response_model=ApplicationResponse)
 def send_application(
     app_id: str,
+    payload: Optional[ApplicationUpdate] = None,
     override_duplicate: bool = Query(False),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -173,7 +174,36 @@ def send_application(
         app = db.query(Application).filter(Application.user_id == current_user.id).order_by(Application.created_at.desc()).first()
 
     if not app:
-        raise HTTPException(status_code=404, detail="Application record not found. Please parse a job posting first.")
+        settings = db.query(AppSettings).filter(AppSettings.user_id == current_user.id).first()
+        comp_name = (payload.company_name if payload and payload.company_name else None) or "Company"
+        role_title = (payload.role if payload and payload.role else None) or "Software Engineer"
+        recip_email = (payload.recipient_email if payload and payload.recipient_email else None) or current_user.email
+        app = Application(
+            id=app_id,
+            user_id=current_user.id,
+            company_name=comp_name,
+            role=role_title,
+            recipient_email=recip_email,
+            generated_subject=payload.generated_subject if payload else None,
+            generated_email=payload.generated_email if payload else None,
+            resume_filename=settings.active_resume if settings else "",
+            status="DRAFT"
+        )
+        db.add(app)
+        db.commit()
+        db.refresh(app)
+
+    if payload:
+        if payload.company_name:
+            app.company_name = payload.company_name
+        if payload.role:
+            app.role = payload.role
+        if payload.recipient_email:
+            app.recipient_email = payload.recipient_email
+        if payload.generated_subject:
+            app.generated_subject = payload.generated_subject
+        if payload.generated_email:
+            app.generated_email = payload.generated_email
 
     settings = db.query(AppSettings).filter(AppSettings.user_id == current_user.id).first()
 

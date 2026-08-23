@@ -136,12 +136,16 @@ export const api = {
     return handleResponse(res);
   },
 
-  async sendApplication(id, overrideDuplicate = false) {
+  async sendApplication(id, overrideDuplicate = false, appPayload = null) {
     const url = `${API_BASE_URL}/applications/${id}/send?override_duplicate=${overrideDuplicate}`;
-    const res = await fetch(url, {
+    const options = {
       method: 'POST',
-      headers: getAuthHeaders(),
-    });
+      headers: getAuthHeaders(appPayload ? { 'Content-Type': 'application/json' } : {}),
+    };
+    if (appPayload) {
+      options.body = JSON.stringify(appPayload);
+    }
+    const res = await fetch(url, options);
     return handleResponse(res);
   },
 
