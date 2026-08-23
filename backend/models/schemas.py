@@ -82,3 +82,45 @@ class SettingsSchema(BaseModel):
 
 class TestEmailRequest(BaseModel):
     recipient_email: str
+
+class UserSignup(BaseModel):
+    name: str
+    email: str
+    password: str
+    app_password: Optional[str] = None
+
+class UserLogin(BaseModel):
+    email: str
+    password: str
+
+class UserResponse(BaseModel):
+    id: int
+    name: str
+    email: str
+    app_password: Optional[str] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class AuthResponse(BaseModel):
+    token: str
+    user: UserResponse
+
+class SupportTicketCreate(BaseModel):
+    subject: str
+    message: str
+
+class SupportTicketResponse(BaseModel):
+    id: int
+    user_id: Optional[int] = None
+    name: str
+    email: str
+    subject: str
+    message: str
+    status: str
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+

@@ -5,31 +5,48 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from backend.database.db import get_db
-from backend.models.models import Application, AppSettings
+from backend.models.models import Application, AppSettings, User
 from backend.models.schemas import ApplicationResponse, ApplicationUpdate
 from backend.services.email_service import validate_email_send_request, send_application_email
+from backend.routes.auth import get_optional_user
 
 router = APIRouter(prefix="/api/applications", tags=["Applications"])
 
 @router.get("", response_model=List[ApplicationResponse])
-def get_applications(status: Optional[str] = None, db: Session = Depends(get_db)):
-    query = db.query(Application)
+def get_applications(
+    status: Optional[str] = None,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user)
+):
+    user_id = current_user.id if current_user else 1
+    query = db.query(Application).filter(Application.user_id == user_id)
     if status:
         query = query.filter(Application.status == status.upper())
     return query.order_by(Application.created_at.desc()).all()
 
 
 @router.get("/{app_id}", response_model=ApplicationResponse)
-def get_application_by_id(app_id: str, db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id).first()
+def get_application_by_id(
+    app_id: str,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user)
+):
+    user_id = current_user.id if current_user else 1
+    app = db.query(Application).filter(Application.id == app_id, Application.user_id == user_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Application not found.")
     return app
 
 
 @router.put("/{app_id}", response_model=ApplicationResponse)
-def update_application(app_id: str, payload: ApplicationUpdate, db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id).first()
+def update_application(
+    app_id: str,
+    payload: ApplicationUpdate,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user)
+):
+    user_id = current_user.id if current_user else 1
+    app = db.query(Application).filter(Application.id == app_id, Application.user_id == user_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Application not found.")
 
@@ -54,11 +71,16 @@ def update_application(app_id: str, payload: ApplicationUpdate, db: Session = De
 
 
 @router.post("/batch-send")
-def batch_send_applications(app_ids: Optional[List[str]] = None, db: Session = Depends(get_db)):
-    """
-    1-Click Batch Send: Transmits all generated application emails concurrently via Gmail SMTP.
-    """
-    settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+def batch_send_applications(
+    app_ids: Optional[List[str]] = None,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user)
+):
+    user_id = current_user.id if current_user else 1
+    settings = db.query(AppSettings).filter(AppSettings.user_id == user_id).first()
+    if not settings and user_id == 1:
+        settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+
     smtp_dict = {
         "smtp_host": settings.smtp_host if settings else "smtp.gmail.com",
         "smtp_port": settings.smtp_port if settings else 587,
@@ -68,10 +90,9 @@ def batch_send_applications(app_ids: Optional[List[str]] = None, db: Session = D
     }
 
     if app_ids and len(app_ids) > 0:
-        apps = db.query(Application).filter(Application.id.in_(app_ids)).all()
+        apps = db.query(Application).filter(Application.id.in_(app_ids), Application.user_id == user_id).all()
     else:
-        # Send all ready applications
-        apps = db.query(Application).filter(Application.status.in_(["GENERATED", "REVIEWED", "DRAFT"])).all()
+        apps = db.query(Application).filter(Application.user_id == user_id, Application.status.in_(["GENERATED", "REVIEWED", "DRAFT"])).all()
 
     valid_apps = [a for a in apps if a.recipient_email]
 
@@ -82,7 +103,7 @@ def batch_send_applications(app_ids: Optional[List[str]] = None, db: Session = D
     failed_count = 0
 
     def send_single_app(app: Application):
-        subject = app.generated_subject or app.explicit_subject or f"Application for {app.role} - Yash Nagapure"
+        subject = app.generated_subject or app.explicit_subject or f"Application for {app.role}"
         success, send_err = send_application_email(
             recipient_email=app.recipient_email,
             subject=subject,
@@ -120,9 +141,11 @@ def batch_send_applications(app_ids: Optional[List[str]] = None, db: Session = D
 def send_application(
     app_id: str,
     override_duplicate: bool = Query(False),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user)
 ):
-    app = db.query(Application).filter(Application.id == app_id).first()
+    user_id = current_user.id if current_user else 1
+    app = db.query(Application).filter(Application.id == app_id, Application.user_id == user_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Application not found.")
 
@@ -144,6 +167,7 @@ def send_application(
 
     if not override_duplicate:
         duplicate = db.query(Application).filter(
+            Application.user_id == user_id,
             Application.recipient_email == app.recipient_email,
             Application.company_name == app.company_name,
             Application.role == app.role,
@@ -157,7 +181,10 @@ def send_application(
                 detail=f"Application already sent to {app.company_name} ({app.recipient_email}) for role '{app.role}'."
             )
 
-    settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+    settings = db.query(AppSettings).filter(AppSettings.user_id == user_id).first()
+    if not settings and user_id == 1:
+        settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+
     smtp_dict = {
         "smtp_host": settings.smtp_host if settings else "smtp.gmail.com",
         "smtp_port": settings.smtp_port if settings else 587,
@@ -166,7 +193,7 @@ def send_application(
         "sender_email": settings.sender_email if settings else "yashnagapure25@gmail.com",
     }
 
-    subject = app.generated_subject or app.explicit_subject or f"Application for {app.role} - Yash Nagapure"
+    subject = app.generated_subject or app.explicit_subject or f"Application for {app.role}"
 
     success, send_err = send_application_email(
         recipient_email=app.recipient_email,
@@ -190,11 +217,17 @@ def send_application(
 
 
 @router.delete("/{app_id}")
-def delete_application(app_id: str, db: Session = Depends(get_db)):
-    app = db.query(Application).filter(Application.id == app_id).first()
+def delete_application(
+    app_id: str,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user)
+):
+    user_id = current_user.id if current_user else 1
+    app = db.query(Application).filter(Application.id == app_id, Application.user_id == user_id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Application not found.")
 
     db.delete(app)
     db.commit()
     return {"message": "Application deleted successfully."}
+

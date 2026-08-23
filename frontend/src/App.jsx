@@ -2,14 +2,22 @@ import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import EmailPreviewModal from './components/EmailPreviewModal';
+import AuthModal from './components/AuthModal';
 
 import Dashboard from './pages/Dashboard';
 import ApplicationsPage from './pages/ApplicationsPage';
 import SettingsPage from './pages/SettingsPage';
+import SupportPage from './pages/SupportPage';
 
 import { api } from './services/api';
 
+window.api = api;
+
 export default function App() {
+  const [user, setUser] = useState(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
   const [activeTab, setActiveTab] = useState('dashboard');
   const [applications, setApplications] = useState([]);
   const [profile, setProfile] = useState(null);
@@ -20,13 +28,32 @@ export default function App() {
   const [isBatchSending, setIsBatchSending] = useState(false);
   const [sendingIds, setSendingIds] = useState([]);
 
+  // Mobile Menu Drawer state
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+
   // Modal State
   const [reviewApp, setReviewApp] = useState(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
 
   useEffect(() => {
-    loadData();
+    checkAuth();
   }, []);
+
+  const checkAuth = async () => {
+    setIsAuthLoading(true);
+    try {
+      const currentUser = await api.getMe();
+      setUser(currentUser);
+      setShowAuthModal(false);
+      await loadData();
+    } catch (err) {
+      console.warn('Authentication check notice:', err.message);
+      setUser(null);
+      setShowAuthModal(true);
+    } finally {
+      setIsAuthLoading(false);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -36,13 +63,28 @@ export default function App() {
         api.getAppSettings(),
         api.getResumes()
       ]);
-      setApplications(appsRes);
+      setApplications(appsRes || []);
       setProfile(profRes);
       setAppSettings(settingsRes);
-      setResumesList(resumesRes);
+      setResumesList(resumesRes || []);
     } catch (err) {
-      console.error('Error loading initial data:', err);
+      console.error('Error loading data:', err);
     }
+  };
+
+  const handleAuthSuccess = (userData) => {
+    setUser(userData);
+    setShowAuthModal(false);
+    loadData();
+  };
+
+  const handleLogout = () => {
+    api.logout();
+    setUser(null);
+    setShowAuthModal(true);
+    setApplications([]);
+    setProfile(null);
+    setAppSettings(null);
   };
 
   // High-Speed Multi-Job Ingestion
@@ -52,7 +94,6 @@ export default function App() {
       const createdApps = await api.parseJobsText(text);
       await loadData();
       if (createdApps && createdApps.length === 1) {
-        // Single job -> open review modal immediately
         setReviewApp(createdApps[0]);
       }
       setActiveTab('dashboard');
@@ -182,6 +223,7 @@ export default function App() {
     try {
       const updated = await api.updateProfile(profileData);
       setProfile(updated);
+      alert('Candidate profile saved successfully!');
     } catch (err) {
       alert(`Profile update failed: ${err.message}`);
     }
@@ -191,6 +233,7 @@ export default function App() {
     try {
       const updated = await api.updateAppSettings(settingsData);
       setAppSettings(updated);
+      alert('SMTP settings saved successfully!');
     } catch (err) {
       alert(`Settings update failed: ${err.message}`);
     }
@@ -231,8 +274,17 @@ export default function App() {
     parsed: 'Parsed Job Opportunities',
     sent: 'Sent Applications',
     failed: 'Failed Applications',
+    support: 'User Support & Help Center',
     settings: 'Candidate Profile & Credentials'
   };
+
+  if (isAuthLoading) {
+    return (
+      <div style={{ display: 'flex', height: '100vh', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--bg-app)', color: 'var(--text-primary)' }}>
+        <p className="animate-pulse" style={{ fontSize: '1.1rem', fontWeight: '600' }}>Loading AI Job Assistant...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="app-container">
@@ -240,6 +292,9 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         counts={counts}
+        user={user}
+        isMobileOpen={isMobileOpen}
+        onCloseMobile={() => setIsMobileOpen(false)}
       />
 
       <main className="main-content">
@@ -247,6 +302,9 @@ export default function App() {
           title={tabTitles[activeTab] || 'AI Job Application Assistant'}
           activeResume={appSettings?.active_resume}
           autoSend={appSettings?.auto_send}
+          user={user}
+          onLogout={handleLogout}
+          onToggleMobileMenu={() => setIsMobileOpen(!isMobileOpen)}
         />
 
         {(activeTab === 'dashboard' || activeTab === 'new') && (
@@ -275,6 +333,10 @@ export default function App() {
           />
         )}
 
+        {activeTab === 'support' && (
+          <SupportPage user={user} />
+        )}
+
         {activeTab === 'settings' && (
           <SettingsPage
             profile={profile}
@@ -299,6 +361,12 @@ export default function App() {
         isRegenerating={isRegenerating}
         sendingIds={sendingIds}
       />
+
+      <AuthModal
+        isOpen={showAuthModal}
+        onAuthSuccess={handleAuthSuccess}
+      />
     </div>
   );
 }
+

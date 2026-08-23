@@ -4,12 +4,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from backend.database.db import engine, Base, SessionLocal
-from backend.models.models import CandidateProfile, AppSettings, Application
-from backend.routes import jobs, applications, settings
+from backend.database.db import engine, Base, SessionLocal, apply_migrations
+from backend.models.models import CandidateProfile, AppSettings, Application, User
+from backend.routes import jobs, applications, settings, auth, support
+from backend.routes.auth import hash_password
 
-# Initialize DB tables
+# Initialize DB tables & migrations
 Base.metadata.create_all(bind=engine)
+apply_migrations()
+
 
 app = FastAPI(
     title="AI Job Application Assistant API",
@@ -32,23 +35,42 @@ os.makedirs(uploads_dir, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
 
 # Include Routers
+app.include_router(auth.router)
 app.include_router(jobs.router)
 app.include_router(applications.router)
 app.include_router(settings.router)
+app.include_router(support.router)
 
 
 @app.on_event("startup")
 def seed_initial_data():
     """
-    Seeds initial candidate profile (Yash Nagapure) and default settings if missing.
+    Seeds initial candidate profile (Yash Nagapure), default user account, and settings if missing.
     Does NOT create any mock job applications so the dashboard starts completely clean.
     """
     db = SessionLocal()
     try:
+        # Seed default user account (Yash Nagapure)
+        user = db.query(User).filter(User.id == 1).first()
+        if not user:
+            user = db.query(User).filter(User.email == "yashnagapure25@gmail.com").first()
+        if not user:
+            user = User(
+                id=1,
+                name="Yash Nagapure",
+                email="yashnagapure25@gmail.com",
+                password_hash=hash_password("yash1234"),
+                app_password="awmtyyfozljwmbvu"
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+
         profile = db.query(CandidateProfile).filter(CandidateProfile.id == 1).first()
         if not profile:
             initial_profile = CandidateProfile(
                 id=1,
+                user_id=user.id,
                 name="Yash Nagapure",
                 email="yashnagapure25@gmail.com",
                 degree="B.Tech Computer Science Engineering",
@@ -69,11 +91,14 @@ def seed_initial_data():
                 bio="Final-year Computer Science Engineering student passionate about software development, AI automation, and full-stack web applications."
             )
             db.add(initial_profile)
+        elif not profile.user_id:
+            profile.user_id = user.id
 
         app_setting = db.query(AppSettings).filter(AppSettings.id == 1).first()
         if not app_setting:
             initial_setting = AppSettings(
                 id=1,
+                user_id=user.id,
                 auto_send=False,
                 smtp_host="smtp.gmail.com",
                 smtp_port=587,
@@ -83,6 +108,8 @@ def seed_initial_data():
                 active_resume="Yash_Nagapure_Resume.pdf"
             )
             db.add(initial_setting)
+        elif not app_setting.user_id:
+            app_setting.user_id = user.id
 
         db.commit()
     finally:
@@ -101,3 +128,4 @@ def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
+

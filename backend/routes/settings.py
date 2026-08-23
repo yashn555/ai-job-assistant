@@ -2,29 +2,41 @@ import json
 import os
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import List
+from typing import List, Optional
 
 from backend.database.db import get_db
-from backend.models.models import CandidateProfile, AppSettings
+from backend.models.models import CandidateProfile, AppSettings, User
 from backend.models.schemas import ProfileSchema, SettingsSchema, TestEmailRequest
 from backend.services.resume_service import save_resume_file, list_uploaded_resumes, remove_resume_file
 from backend.services.email_service import send_application_email
+from backend.routes.auth import get_optional_user
 
 router = APIRouter(prefix="/api/settings", tags=["Settings"])
 
 
 @router.get("/profile", response_model=ProfileSchema)
-def get_profile(db: Session = Depends(get_db)):
-    profile = db.query(CandidateProfile).filter(CandidateProfile.id == 1).first()
+def get_profile(
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user)
+):
+    user_id = current_user.id if current_user else 1
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == user_id).first()
+    if not profile and user_id == 1:
+        profile = db.query(CandidateProfile).filter(CandidateProfile.id == 1).first()
+
     if not profile:
-        profile = CandidateProfile(id=1)
+        profile = CandidateProfile(
+            user_id=user_id,
+            name=current_user.name if current_user else "Candidate",
+            email=current_user.email if current_user else "candidate@example.com"
+        )
         db.add(profile)
         db.commit()
         db.refresh(profile)
 
     return ProfileSchema(
         name=profile.name,
-        email=profile.email or "yashnagapure25@gmail.com",
+        email=profile.email or (current_user.email if current_user else "yashnagapure25@gmail.com"),
         degree=profile.degree,
         college=profile.college,
         graduation_year=profile.graduation_year,
@@ -38,10 +50,18 @@ def get_profile(db: Session = Depends(get_db)):
 
 
 @router.put("/profile", response_model=ProfileSchema)
-def update_profile(payload: ProfileSchema, db: Session = Depends(get_db)):
-    profile = db.query(CandidateProfile).filter(CandidateProfile.id == 1).first()
+def update_profile(
+    payload: ProfileSchema,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user)
+):
+    user_id = current_user.id if current_user else 1
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == user_id).first()
+    if not profile and user_id == 1:
+        profile = db.query(CandidateProfile).filter(CandidateProfile.id == 1).first()
+
     if not profile:
-        profile = CandidateProfile(id=1)
+        profile = CandidateProfile(user_id=user_id)
         db.add(profile)
 
     profile.name = payload.name
@@ -59,20 +79,27 @@ def update_profile(payload: ProfileSchema, db: Session = Depends(get_db)):
 
     db.commit()
     db.refresh(profile)
-    return get_profile(db=db)
+    return get_profile(db=db, current_user=current_user)
 
 
 @router.get("/app", response_model=SettingsSchema)
-def get_app_settings(db: Session = Depends(get_db)):
-    settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+def get_app_settings(
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user)
+):
+    user_id = current_user.id if current_user else 1
+    settings = db.query(AppSettings).filter(AppSettings.user_id == user_id).first()
+    if not settings and user_id == 1:
+        settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+
     if not settings:
         settings = AppSettings(
-            id=1,
+            user_id=user_id,
             smtp_host=os.getenv("SMTP_HOST", "smtp.gmail.com"),
             smtp_port=int(os.getenv("SMTP_PORT", 587)),
-            smtp_username=os.getenv("SMTP_USERNAME", "yashnagapure25@gmail.com"),
-            smtp_password=os.getenv("SMTP_PASSWORD", "awmtyyfozljwmbvu"),
-            sender_email=os.getenv("SENDER_EMAIL", "yashnagapure25@gmail.com")
+            smtp_username=current_user.email if current_user else "yashnagapure25@gmail.com",
+            smtp_password=current_user.app_password if (current_user and current_user.app_password) else "awmtyyfozljwmbvu",
+            sender_email=current_user.email if current_user else "yashnagapure25@gmail.com"
         )
         db.add(settings)
         db.commit()
@@ -82,18 +109,26 @@ def get_app_settings(db: Session = Depends(get_db)):
         auto_send=settings.auto_send,
         smtp_host=settings.smtp_host or "smtp.gmail.com",
         smtp_port=settings.smtp_port or 587,
-        smtp_username=settings.smtp_username or "yashnagapure25@gmail.com",
-        smtp_password=settings.smtp_password or "awmtyyfozljwmbvu",
-        sender_email=settings.sender_email or "yashnagapure25@gmail.com",
-        active_resume=settings.active_resume or "Yash_Nagapure_Resume.pdf"
+        smtp_username=settings.smtp_username or (current_user.email if current_user else "yashnagapure25@gmail.com"),
+        smtp_password=settings.smtp_password or (current_user.app_password if current_user else "awmtyyfozljwmbvu"),
+        sender_email=settings.sender_email or (current_user.email if current_user else "yashnagapure25@gmail.com"),
+        active_resume=settings.active_resume or ""
     )
 
 
 @router.put("/app", response_model=SettingsSchema)
-def update_app_settings(payload: SettingsSchema, db: Session = Depends(get_db)):
-    settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+def update_app_settings(
+    payload: SettingsSchema,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user)
+):
+    user_id = current_user.id if current_user else 1
+    settings = db.query(AppSettings).filter(AppSettings.user_id == user_id).first()
+    if not settings and user_id == 1:
+        settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+
     if not settings:
-        settings = AppSettings(id=1)
+        settings = AppSettings(user_id=user_id)
         db.add(settings)
 
     settings.auto_send = payload.auto_send
@@ -107,20 +142,28 @@ def update_app_settings(payload: SettingsSchema, db: Session = Depends(get_db)):
 
     db.commit()
     db.refresh(settings)
-    return get_app_settings(db=db)
+    return get_app_settings(db=db, current_user=current_user)
 
 
 @router.post("/resume")
-async def upload_resume(file: UploadFile = File(...), db: Session = Depends(get_db)):
+async def upload_resume(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user)
+):
     if not file.filename.lower().endswith((".pdf", ".docx")):
         raise HTTPException(status_code=400, detail="Only PDF and DOCX resume formats are supported.")
 
     bytes_data = await file.read()
     filename = save_resume_file(bytes_data, file.filename)
 
-    settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+    user_id = current_user.id if current_user else 1
+    settings = db.query(AppSettings).filter(AppSettings.user_id == user_id).first()
+    if not settings and user_id == 1:
+        settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+
     if not settings:
-        settings = AppSettings(id=1)
+        settings = AppSettings(user_id=user_id)
         db.add(settings)
 
     settings.active_resume = filename
@@ -135,12 +178,17 @@ def get_resumes():
 
 
 @router.delete("/resume/{filename}")
-def delete_resume(filename: str, db: Session = Depends(get_db)):
+def delete_resume(
+    filename: str,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user)
+):
     success = remove_resume_file(filename)
     if not success:
         raise HTTPException(status_code=404, detail="File not found.")
 
-    settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+    user_id = current_user.id if current_user else 1
+    settings = db.query(AppSettings).filter(AppSettings.user_id == user_id).first()
     if settings and settings.active_resume == filename:
         settings.active_resume = ""
         db.commit()
@@ -149,8 +197,16 @@ def delete_resume(filename: str, db: Session = Depends(get_db)):
 
 
 @router.post("/test-email")
-def test_email(payload: TestEmailRequest, db: Session = Depends(get_db)):
-    settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+def test_email(
+    payload: TestEmailRequest,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user)
+):
+    user_id = current_user.id if current_user else 1
+    settings = db.query(AppSettings).filter(AppSettings.user_id == user_id).first()
+    if not settings and user_id == 1:
+        settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+
     smtp_dict = {
         "smtp_host": settings.smtp_host if settings else "smtp.gmail.com",
         "smtp_port": settings.smtp_port if settings else 587,
@@ -162,7 +218,7 @@ def test_email(payload: TestEmailRequest, db: Session = Depends(get_db)):
     success, msg = send_application_email(
         recipient_email=payload.recipient_email,
         subject="AI Job Application Assistant - Test Email",
-        body="Congratulations! Your Gmail SMTP email setup (yashnagapure25@gmail.com) for AI Job Application Assistant is working correctly.",
+        body=f"Congratulations! Your Gmail SMTP email setup ({smtp_dict['sender_email']}) for AI Job Application Assistant is working correctly.",
         smtp_settings=smtp_dict
     )
 
@@ -170,3 +226,4 @@ def test_email(payload: TestEmailRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=msg)
 
     return {"message": "Test email sent successfully!", "recipient": payload.recipient_email}
+

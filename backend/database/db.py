@@ -27,3 +27,19 @@ def get_db():
         yield db
     finally:
         db.close()
+
+def apply_migrations():
+    from sqlalchemy import inspect, text
+    try:
+        inspector = inspect(engine)
+        table_names = inspector.get_table_names()
+        with engine.connect() as conn:
+            for table, col in [("candidate_profile", "user_id"), ("app_settings", "user_id"), ("applications", "user_id")]:
+                if table in table_names:
+                    columns = [c["name"] for c in inspector.get_columns(table)]
+                    if col not in columns:
+                        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} INTEGER DEFAULT 1"))
+                        conn.commit()
+    except Exception as e:
+        print(f"Migration notice: {e}")
+
