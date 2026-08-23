@@ -1,5 +1,8 @@
+import base64
 import hashlib
+import hmac
 import json
+import time
 from fastapi import APIRouter, Depends, HTTPException, Header, status
 from sqlalchemy.orm import Session
 from typing import Optional
@@ -10,17 +13,26 @@ from backend.models.schemas import UserSignup, UserLogin, AuthResponse, UserResp
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
-SALT = b"ai_job_assistant_secure_salt_2026"
+SALT = b"ai_job_assistant_secure_salt_2026_stateless_v2"
 
 def hash_password(password: str) -> str:
     key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), SALT, 100000)
     return key.hex()
 
-def create_token(user_id: int) -> str:
-    token_data = f"token_{user_id}_{hash_password(str(user_id))[:12]}"
-    return token_data
+def create_token(user: User) -> str:
+    payload = {
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "app_pass": user.app_password or "",
+        "ts": int(time.time())
+    }
+    payload_bytes = json.dumps(payload).encode("utf-8")
+    payload_b64 = base64.urlsafe_b64encode(payload_bytes).decode("utf-8").rstrip("=")
+    signature = hmac.new(SALT, payload_b64.encode("utf-8"), hashlib.sha256).hexdigest()[:16]
+    return f"token_{payload_b64}_{signature}"
 
-def decode_token(token: str) -> Optional[int]:
+def decode_token(token: str) -> Optional[dict]:
     if not token:
         return None
     token_clean = token.strip().strip('"').strip("'")
@@ -28,13 +40,20 @@ def decode_token(token: str) -> Optional[int]:
         return None
     try:
         parts = token_clean.split("_")
-        user_id = int(parts[1])
-        expected = f"token_{user_id}_{hash_password(str(user_id))[:12]}"
-        if token_clean == expected:
-            return user_id
+        if len(parts) < 3:
+            return None
+        payload_b64 = parts[1]
+        signature = parts[2]
+
+        expected_sig = hmac.new(SALT, payload_b64.encode("utf-8"), hashlib.sha256).hexdigest()[:16]
+        if not hmac.compare_digest(signature, expected_sig):
+            return None
+
+        padding = "=" * (4 - len(payload_b64) % 4)
+        payload_json = base64.urlsafe_b64decode((payload_b64 + padding).encode("utf-8")).decode("utf-8")
+        return json.loads(payload_json)
     except Exception:
         return None
-    return None
 
 def get_current_user(
     authorization: Optional[str] = Header(None),
@@ -47,14 +66,40 @@ def get_current_user(
     elif x_user_token:
         token = x_user_token.strip().strip('"').strip("'")
 
-    user_id = decode_token(token) if token else None
-    if not user_id:
+    payload = decode_token(token) if token else None
+    if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Session expired or invalid. Please log in."
         )
 
+    user_id = payload["id"]
+    email = payload["email"]
+    name = payload["name"]
+    app_password = payload.get("app_pass")
+
+    # Fetch user from current instance database
     user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        user = db.query(User).filter(User.email == email).first()
+
+    # Re-provision user record on cold start Vercel instance if needed
+    if not user:
+        try:
+            user = User(
+                id=user_id,
+                name=name,
+                email=email,
+                password_hash="stateless_session",
+                app_password=app_password
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        except Exception:
+            db.rollback()
+            user = db.query(User).filter(User.email == email).first()
+
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -72,7 +117,6 @@ def get_optional_user(
         return get_current_user(authorization=authorization, x_user_token=x_user_token, db=db)
     except HTTPException:
         return None
-
 
 
 @router.post("/signup", response_model=AuthResponse)
@@ -97,12 +141,12 @@ def signup(payload: UserSignup, db: Session = Depends(get_db)):
         user_id=new_user.id,
         name=new_user.name,
         email=new_user.email,
-        degree="B.Tech / Bachelor Degree",
-        college="University",
-        graduation_year="2026",
-        skills_json=json.dumps(["JavaScript", "Python", "React", "HTML", "CSS"]),
-        projects_json=json.dumps(["AI Job Assistant"]),
-        bio=f"Passionate candidate interested in technology and software engineering opportunities."
+        degree="",
+        college="",
+        graduation_year="",
+        skills_json=json.dumps([]),
+        projects_json=json.dumps([]),
+        bio=""
     )
     db.add(profile)
 
@@ -120,7 +164,7 @@ def signup(payload: UserSignup, db: Session = Depends(get_db)):
     db.add(app_settings)
     db.commit()
 
-    token = create_token(new_user.id)
+    token = create_token(new_user)
     return AuthResponse(
         token=token,
         user=UserResponse.model_validate(new_user)
@@ -134,7 +178,7 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
     if not user or user.password_hash != hash_password(payload.password):
         raise HTTPException(status_code=400, detail="Invalid email or password.")
 
-    token = create_token(user.id)
+    token = create_token(user)
     return AuthResponse(
         token=token,
         user=UserResponse.model_validate(user)
