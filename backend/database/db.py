@@ -69,8 +69,6 @@ except Exception as e:
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-
-
 Base = declarative_base()
 
 def get_db():
@@ -92,6 +90,11 @@ def apply_migrations():
                     if col not in columns:
                         conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} INTEGER DEFAULT 1"))
                         conn.commit()
+
+            if "app_settings" in table_names:
+                columns = [c["name"] for c in inspector.get_columns("app_settings")]
+                if "resume_base64" not in columns:
+                    conn.execute(text("ALTER TABLE app_settings ADD COLUMN resume_base64 TEXT"))
+                    conn.commit()
     except Exception as e:
         print(f"Migration notice: {e}")
-

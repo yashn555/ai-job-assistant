@@ -8,6 +8,7 @@ from backend.database.db import get_db
 from backend.models.models import Application, AppSettings, User
 from backend.models.schemas import ApplicationResponse, ApplicationUpdate
 from backend.services.email_service import validate_email_send_request, send_application_email
+from backend.services.resume_service import ensure_resume_on_disk
 from backend.routes.auth import get_current_user
 
 router = APIRouter(prefix="/api/applications", tags=["Applications"])
@@ -32,7 +33,7 @@ def get_application_by_id(
 ):
     app = db.query(Application).filter(Application.id == app_id, Application.user_id == current_user.id).first()
     if not app:
-        raise HTTPException(status_code=404, detail="Application not found.")
+        raise HTTPException(status_code=404, detail="Application record not found. Please click 'Generate AI Email' again.")
     return app
 
 
@@ -45,7 +46,7 @@ def update_application(
 ):
     app = db.query(Application).filter(Application.id == app_id, Application.user_id == current_user.id).first()
     if not app:
-        raise HTTPException(status_code=404, detail="Application not found.")
+        raise HTTPException(status_code=404, detail="Application record not found.")
 
     if payload.company_name is not None:
         app.company_name = payload.company_name
@@ -104,12 +105,16 @@ def batch_send_applications(
     failed_count = 0
 
     def send_single_app(app: Application):
+        target_resume = app.resume_filename or (settings.active_resume if settings else None)
+        if settings and target_resume:
+            ensure_resume_on_disk(target_resume, settings.resume_base64)
+
         subject = app.generated_subject or app.explicit_subject or f"Application for {app.role}"
         success, send_err = send_application_email(
             recipient_email=app.recipient_email,
             subject=subject,
             body=app.generated_email,
-            resume_filename=app.resume_filename,
+            resume_filename=target_resume,
             smtp_settings=smtp_dict
         )
         return app.id, success, send_err
@@ -147,7 +152,13 @@ def send_application(
 ):
     app = db.query(Application).filter(Application.id == app_id, Application.user_id == current_user.id).first()
     if not app:
-        raise HTTPException(status_code=404, detail="Application not found.")
+        raise HTTPException(status_code=404, detail="Application record not found.")
+
+    settings = db.query(AppSettings).filter(AppSettings.user_id == current_user.id).first()
+
+    target_resume = app.resume_filename or (settings.active_resume if settings else None)
+    if settings and target_resume:
+        ensure_resume_on_disk(target_resume, settings.resume_base64)
 
     valid, err_msg = validate_email_send_request(
         recipient_email=app.recipient_email,
@@ -155,7 +166,7 @@ def send_application(
         role=app.role,
         subject=app.generated_subject or app.explicit_subject,
         body=app.generated_email,
-        resume_filename=app.resume_filename
+        resume_filename=target_resume
     )
 
     if not valid:
@@ -181,8 +192,6 @@ def send_application(
                 detail=f"Application already sent to {app.company_name} ({app.recipient_email}) for role '{app.role}'."
             )
 
-    settings = db.query(AppSettings).filter(AppSettings.user_id == current_user.id).first()
-
     smtp_username = settings.smtp_username if (settings and settings.smtp_username) else current_user.email
     smtp_password = settings.smtp_password if (settings and settings.smtp_password) else (current_user.app_password or "")
     sender_email = settings.sender_email if (settings and settings.sender_email) else current_user.email
@@ -204,7 +213,7 @@ def send_application(
         recipient_email=app.recipient_email,
         subject=subject,
         body=app.generated_email,
-        resume_filename=app.resume_filename,
+        resume_filename=target_resume,
         smtp_settings=smtp_dict
     )
 

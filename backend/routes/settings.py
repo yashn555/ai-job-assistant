@@ -149,10 +149,13 @@ async def upload_resume(
         settings = AppSettings(user_id=current_user.id)
         db.add(settings)
 
+    import base64
     settings.active_resume = filename
+    settings.resume_base64 = base64.b64encode(bytes_data).decode("utf-8")
     db.commit()
 
     return {"message": "Resume uploaded successfully.", "filename": filename}
+
 
 
 @router.get("/resume")

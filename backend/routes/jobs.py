@@ -115,12 +115,26 @@ def generate_job_email(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    if not payload.application_id:
-        raise HTTPException(status_code=400, detail="application_id is required.")
+    app = None
+    if payload.application_id:
+        app = db.query(Application).filter(Application.id == payload.application_id, Application.user_id == current_user.id).first()
 
-    app = db.query(Application).filter(Application.id == payload.application_id, Application.user_id == current_user.id).first()
     if not app:
-        raise HTTPException(status_code=404, detail="Application not found.")
+        app = db.query(Application).filter(Application.user_id == current_user.id).order_by(Application.created_at.desc()).first()
+
+    if not app:
+        settings = db.query(AppSettings).filter(AppSettings.user_id == current_user.id).first()
+        app = Application(
+            user_id=current_user.id,
+            company_name="Target Company",
+            role="Software Engineer",
+            recipient_email=current_user.email,
+            resume_filename=settings.active_resume if settings else "",
+            status="DRAFT"
+        )
+        db.add(app)
+        db.commit()
+        db.refresh(app)
 
     profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == current_user.id).first()
 

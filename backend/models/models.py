@@ -65,6 +65,8 @@ class AppSettings(Base):
     smtp_password = Column(String(255), default="")
     sender_email = Column(String(255), default="")
     active_resume = Column(String(255), default="")
+    resume_base64 = Column(Text, nullable=True)
+
 
 
 class SupportTicket(Base):

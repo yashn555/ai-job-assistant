@@ -1,5 +1,6 @@
 import os
 import shutil
+import base64
 import logging
 from typing import Optional, List, Dict, Any
 
@@ -50,7 +51,7 @@ def get_resume_path(filename: Optional[str] = None) -> Optional[str]:
         if os.path.exists(path):
             return path
 
-    # Check for default PDF in uploads directory
+    # Check for default PDF/DOCX in uploads directory
     if os.path.exists(target_dir):
         for file in os.listdir(target_dir):
             if file.endswith((".pdf", ".docx")) and not file.startswith("."):
@@ -64,6 +65,32 @@ def get_resume_path(filename: Optional[str] = None) -> Optional[str]:
                 return os.path.join(local_dir, file)
 
     return None
+
+
+def ensure_resume_on_disk(filename: Optional[str] = None, resume_base64: Optional[str] = None) -> Optional[str]:
+    """
+    Ensures that the specified resume file exists on disk.
+    If missing on current Vercel instance, reconstitutes it from base64 stored in database.
+    """
+    target_dir = get_upload_dir()
+
+    if filename:
+        filepath = os.path.join(target_dir, filename)
+        if os.path.exists(filepath):
+            return filepath
+
+        if resume_base64:
+            try:
+                file_bytes = base64.b64decode(resume_base64)
+                with open(filepath, "wb") as f:
+                    f.write(file_bytes)
+                logger.info(f"Reconstituted resume '{filename}' from database to {filepath}")
+                return filepath
+            except Exception as e:
+                logger.error(f"Error reconstituting resume from base64: {e}")
+
+    return get_resume_path(filename)
+
 
 def list_uploaded_resumes() -> List[Dict[str, Any]]:
     target_dir = get_upload_dir()
