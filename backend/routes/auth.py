@@ -72,9 +72,8 @@ def get_optional_user(
     try:
         return get_current_user(authorization=authorization, x_user_token=x_user_token, db=db)
     except HTTPException:
-        # Fallback to default seeded user (id=1) if available
-        user = db.query(User).filter(User.id == 1).first()
-        return user
+        return None
+
 
 
 @router.post("/signup", response_model=AuthResponse)

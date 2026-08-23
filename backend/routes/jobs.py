@@ -11,7 +11,7 @@ from backend.models.schemas import (
 )
 from backend.services.parser_service import parse_job_text
 from backend.services.nemotron_service import generate_email_content
-from backend.routes.auth import get_optional_user
+from backend.routes.auth import get_current_user
 
 router = APIRouter(prefix="/api/jobs", tags=["Jobs"])
 
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/api/jobs", tags=["Jobs"])
 def parse_jobs(
     payload: JobParseRequest,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_optional_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Accepts raw text with 1 or 10+ job postings, parses all jobs concurrently,
@@ -28,28 +28,22 @@ def parse_jobs(
     if not payload.text or not payload.text.strip():
         raise HTTPException(status_code=400, detail="Input text cannot be empty.")
 
-    user_id = current_user.id if current_user else 1
-
-    settings = db.query(AppSettings).filter(AppSettings.user_id == user_id).first()
-    if not settings and user_id == 1:
-        settings = db.query(AppSettings).filter(AppSettings.id == 1).first()
+    settings = db.query(AppSettings).filter(AppSettings.user_id == current_user.id).first()
     active_resume = settings.active_resume if settings else ""
 
-    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == user_id).first()
-    if not profile and user_id == 1:
-        profile = db.query(CandidateProfile).filter(CandidateProfile.id == 1).first()
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == current_user.id).first()
 
     profile_dict = {
-        "name": profile.name if profile else (current_user.name if current_user else "Candidate"),
-        "email": profile.email if profile else (current_user.email if current_user else "candidate@example.com"),
-        "degree": profile.degree if profile else "B.Tech Computer Science Engineering",
-        "college": profile.college if profile else "University",
-        "graduation_year": profile.graduation_year if profile else "2026",
+        "name": profile.name if (profile and profile.name) else current_user.name,
+        "email": profile.email if (profile and profile.email) else current_user.email,
+        "degree": profile.degree if profile else "",
+        "college": profile.college if profile else "",
+        "graduation_year": profile.graduation_year if profile else "",
         "linkedin_url": profile.linkedin_url if profile else "",
         "github_url": profile.github_url if profile else "",
         "portfolio_url": profile.portfolio_url if profile else "",
-        "skills": json.loads(profile.skills_json) if profile and profile.skills_json else [],
-        "projects": json.loads(profile.projects_json) if profile and profile.projects_json else []
+        "skills": json.loads(profile.skills_json) if (profile and profile.skills_json) else [],
+        "projects": json.loads(profile.projects_json) if (profile and profile.projects_json) else []
     }
 
     extracted_jobs = parse_job_text(payload.text)
@@ -57,7 +51,7 @@ def parse_jobs(
     def process_single_job(job: ExtractedJob):
         gen_res = generate_email_content(job, profile_dict)
         return {
-            "user_id": user_id,
+            "user_id": current_user.id,
             "company_name": job.company_name,
             "role": job.role,
             "experience": job.experience or "Fresher",
@@ -91,7 +85,7 @@ def parse_jobs(
 async def parse_jobs_file(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_optional_user)
+    current_user: User = Depends(get_current_user)
 ):
     content = ""
     filename = file.filename.lower()
@@ -119,32 +113,28 @@ async def parse_jobs_file(
 def generate_job_email(
     payload: EmailGenerateRequest,
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_optional_user)
+    current_user: User = Depends(get_current_user)
 ):
     if not payload.application_id:
         raise HTTPException(status_code=400, detail="application_id is required.")
 
-    user_id = current_user.id if current_user else 1
-
-    app = db.query(Application).filter(Application.id == payload.application_id, Application.user_id == user_id).first()
+    app = db.query(Application).filter(Application.id == payload.application_id, Application.user_id == current_user.id).first()
     if not app:
         raise HTTPException(status_code=404, detail="Application not found.")
 
-    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == user_id).first()
-    if not profile and user_id == 1:
-        profile = db.query(CandidateProfile).filter(CandidateProfile.id == 1).first()
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == current_user.id).first()
 
     profile_dict = {
-        "name": profile.name if profile else (current_user.name if current_user else "Candidate"),
-        "email": profile.email if profile else (current_user.email if current_user else "candidate@example.com"),
-        "degree": profile.degree if profile else "B.Tech Computer Science Engineering",
-        "college": profile.college if profile else "University",
-        "graduation_year": profile.graduation_year if profile else "2026",
+        "name": profile.name if (profile and profile.name) else current_user.name,
+        "email": profile.email if (profile and profile.email) else current_user.email,
+        "degree": profile.degree if profile else "",
+        "college": profile.college if profile else "",
+        "graduation_year": profile.graduation_year if profile else "",
         "linkedin_url": profile.linkedin_url if profile else "",
         "github_url": profile.github_url if profile else "",
         "portfolio_url": profile.portfolio_url if profile else "",
-        "skills": json.loads(profile.skills_json) if profile and profile.skills_json else [],
-        "projects": json.loads(profile.projects_json) if profile and profile.projects_json else []
+        "skills": json.loads(profile.skills_json) if (profile and profile.skills_json) else [],
+        "projects": json.loads(profile.projects_json) if (profile and profile.projects_json) else []
     }
 
     job_obj = ExtractedJob(
@@ -168,4 +158,3 @@ def generate_job_email(
     db.refresh(app)
 
     return app
-

@@ -5,7 +5,7 @@ from typing import List, Optional
 from backend.database.db import get_db
 from backend.models.models import SupportTicket, User
 from backend.models.schemas import SupportTicketCreate, SupportTicketResponse
-from backend.routes.auth import get_optional_user
+from backend.routes.auth import get_current_user, get_optional_user
 
 router = APIRouter(prefix="/api/support", tags=["Support"])
 
@@ -32,9 +32,7 @@ def submit_support_ticket(
 @router.get("/my-tickets", response_model=List[SupportTicketResponse])
 def get_my_tickets(
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_optional_user)
+    current_user: User = Depends(get_current_user)
 ):
-    if not current_user:
-        return []
     tickets = db.query(SupportTicket).filter(SupportTicket.user_id == current_user.id).order_by(SupportTicket.created_at.desc()).all()
     return [SupportTicketResponse.model_validate(t) for t in tickets]
