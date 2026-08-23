@@ -37,18 +37,8 @@ export default function App() {
 
   useEffect(() => {
     checkAuth();
-
-    const handleUnauthorized = () => {
-      api.logout();
-      setUser(null);
-      setShowAuthModal(true);
-    };
-
-    window.addEventListener('auth_unauthorized', handleUnauthorized);
-    return () => {
-      window.removeEventListener('auth_unauthorized', handleUnauthorized);
-    };
   }, []);
+
 
   const checkAuth = async () => {
     setIsAuthLoading(true);

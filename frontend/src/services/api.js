@@ -17,15 +17,12 @@ function getAuthHeaders(extraHeaders = {}) {
 
 async function handleResponse(response) {
   if (!response.ok) {
-    if (response.status === 401) {
-      localStorage.removeItem('job_assistant_token');
-      window.dispatchEvent(new Event('auth_unauthorized'));
-    }
     const errorData = await response.json().catch(() => ({}));
     throw new Error(errorData.detail || `Request failed with status ${response.status}`);
   }
   return response.json();
 }
+
 
 
 export const api = {

@@ -156,8 +156,9 @@ async def upload_resume(
 
 
 @router.get("/resume")
-def get_resumes(current_user: User = Depends(get_current_user)):
+def get_resumes(current_user: Optional[User] = Depends(get_optional_user)):
     return list_uploaded_resumes()
+
 
 
 @router.delete("/resume/{filename}")
