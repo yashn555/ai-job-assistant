@@ -10,6 +10,7 @@ from backend.models.schemas import ProfileSchema, SettingsSchema, TestEmailReque
 from backend.services.resume_service import save_resume_file, list_uploaded_resumes, remove_resume_file
 from backend.services.email_service import send_application_email
 from backend.services.resume_extractor_service import extract_text_from_pdf_or_docx, parse_resume_details
+from backend.services.crypto_service import encrypt_secret, decrypt_secret, mask_secret, is_masked
 from backend.routes.auth import get_current_user, get_optional_user
 
 router = APIRouter(prefix="/api/settings", tags=["Settings"])
@@ -149,12 +150,13 @@ def get_app_settings(
         db.commit()
         db.refresh(settings)
 
+    stored_pass = settings.smtp_password or current_user.app_password or ""
     return SettingsSchema(
         auto_send=settings.auto_send,
         smtp_host=settings.smtp_host or "smtp.gmail.com",
         smtp_port=settings.smtp_port or 587,
         smtp_username=settings.smtp_username or current_user.email,
-        smtp_password=settings.smtp_password or (current_user.app_password or ""),
+        smtp_password=mask_secret(stored_pass),
         sender_email=settings.sender_email or current_user.email,
         active_resume=settings.active_resume or ""
     )
@@ -180,9 +182,13 @@ def update_app_settings(
         settings.smtp_port = payload.smtp_port
     if payload.smtp_username is not None:
         settings.smtp_username = payload.smtp_username
-    if payload.smtp_password is not None:
-        settings.smtp_password = payload.smtp_password
-        current_user.app_password = payload.smtp_password
+    
+    # Encrypt App Password when provided, without overwriting if client sends mask
+    if payload.smtp_password is not None and not is_masked(payload.smtp_password) and payload.smtp_password.strip() != "":
+        encrypted_pass = encrypt_secret(payload.smtp_password.strip())
+        settings.smtp_password = encrypted_pass
+        current_user.app_password = encrypted_pass
+
     if payload.sender_email is not None:
         settings.sender_email = payload.sender_email
     if payload.active_resume is not None and payload.active_resume != "":
@@ -252,17 +258,18 @@ def test_email(
     settings = db.query(AppSettings).filter(AppSettings.user_id == current_user.id).first()
 
     smtp_username = settings.smtp_username if (settings and settings.smtp_username) else current_user.email
-    smtp_password = settings.smtp_password if (settings and settings.smtp_password) else (current_user.app_password or "")
+    encrypted_pass = settings.smtp_password if (settings and settings.smtp_password) else (current_user.app_password or "")
+    raw_smtp_password = decrypt_secret(encrypted_pass)
     sender_email = settings.sender_email if (settings and settings.sender_email) else current_user.email
 
-    if not smtp_username or not smtp_password:
+    if not smtp_username or not raw_smtp_password:
         raise HTTPException(status_code=400, detail="Gmail App Password is not configured for your account. Please update App Settings.")
 
     smtp_dict = {
         "smtp_host": settings.smtp_host if (settings and settings.smtp_host) else "smtp.gmail.com",
         "smtp_port": settings.smtp_port if (settings and settings.smtp_port) else 587,
         "smtp_username": smtp_username,
-        "smtp_password": smtp_password,
+        "smtp_password": raw_smtp_password,
         "sender_email": sender_email,
     }
 

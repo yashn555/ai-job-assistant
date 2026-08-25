@@ -9,6 +9,7 @@ from backend.models.models import Application, AppSettings, User
 from backend.models.schemas import ApplicationResponse, ApplicationUpdate
 from backend.services.email_service import validate_email_send_request, send_application_email
 from backend.services.resume_service import ensure_resume_on_disk
+from backend.services.crypto_service import decrypt_secret
 from backend.routes.auth import get_current_user
 
 router = APIRouter(prefix="/api/applications", tags=["Applications"])
@@ -95,17 +96,18 @@ def batch_send_applications(
     settings = db.query(AppSettings).filter(AppSettings.user_id == current_user.id).first()
 
     smtp_username = settings.smtp_username if (settings and settings.smtp_username) else current_user.email
-    smtp_password = settings.smtp_password if (settings and settings.smtp_password) else (current_user.app_password or "")
+    encrypted_pass = settings.smtp_password if (settings and settings.smtp_password) else (current_user.app_password or "")
+    raw_smtp_password = decrypt_secret(encrypted_pass)
     sender_email = settings.sender_email if (settings and settings.sender_email) else current_user.email
 
-    if not smtp_username or not smtp_password:
+    if not smtp_username or not raw_smtp_password:
         raise HTTPException(status_code=400, detail="Gmail App Password is not configured for your account. Please configure it in App Settings.")
 
     smtp_dict = {
         "smtp_host": settings.smtp_host if (settings and settings.smtp_host) else "smtp.gmail.com",
         "smtp_port": settings.smtp_port if (settings and settings.smtp_port) else 587,
         "smtp_username": smtp_username,
-        "smtp_password": smtp_password,
+        "smtp_password": raw_smtp_password,
         "sender_email": sender_email,
     }
 
@@ -244,17 +246,18 @@ def send_application(
             )
 
     smtp_username = settings.smtp_username if (settings and settings.smtp_username) else current_user.email
-    smtp_password = settings.smtp_password if (settings and settings.smtp_password) else (current_user.app_password or "")
+    encrypted_pass = settings.smtp_password if (settings and settings.smtp_password) else (current_user.app_password or "")
+    raw_smtp_password = decrypt_secret(encrypted_pass)
     sender_email = settings.sender_email if (settings and settings.sender_email) else current_user.email
 
-    if not smtp_username or not smtp_password:
+    if not smtp_username or not raw_smtp_password:
         raise HTTPException(status_code=400, detail="Gmail App Password is not configured for your account. Please update App Settings.")
 
     smtp_dict = {
         "smtp_host": settings.smtp_host if (settings and settings.smtp_host) else "smtp.gmail.com",
         "smtp_port": settings.smtp_port if (settings and settings.smtp_port) else 587,
         "smtp_username": smtp_username,
-        "smtp_password": smtp_password,
+        "smtp_password": raw_smtp_password,
         "sender_email": sender_email,
     }
 

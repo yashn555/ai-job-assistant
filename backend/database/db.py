@@ -84,7 +84,7 @@ def apply_migrations():
         inspector = inspect(engine)
         table_names = inspector.get_table_names()
         with engine.connect() as conn:
-            for table, col in [("candidate_profile", "user_id"), ("app_settings", "user_id"), ("applications", "user_id")]:
+            for table, col in [("candidate_profile", "user_id"), ("app_settings", "user_id"), ("applications", "user_id"), ("support_tickets", "user_id")]:
                 if table in table_names:
                     columns = [c["name"] for c in inspector.get_columns(table)]
                     if col not in columns:
@@ -111,5 +111,28 @@ def apply_migrations():
                 if "resume_base64" not in columns:
                     conn.execute(text("ALTER TABLE app_settings ADD COLUMN resume_base64 TEXT"))
                     conn.commit()
+
+            # Automatic encryption migration for existing plain text passwords
+            try:
+                from backend.services.crypto_service import encrypt_secret
+                if "users" in table_names:
+                    result = conn.execute(text("SELECT id, app_password FROM users WHERE app_password IS NOT NULL AND app_password != ''")).fetchall()
+                    for row in result:
+                        user_id, raw_p = row[0], row[1]
+                        if raw_p and not raw_p.startswith("gAAAAA"):
+                            enc_p = encrypt_secret(raw_p)
+                            conn.execute(text("UPDATE users SET app_password = :p WHERE id = :uid"), {"p": enc_p, "uid": user_id})
+                    conn.commit()
+
+                if "app_settings" in table_names:
+                    result = conn.execute(text("SELECT id, smtp_password FROM app_settings WHERE smtp_password IS NOT NULL AND smtp_password != ''")).fetchall()
+                    for row in result:
+                        setting_id, raw_p = row[0], row[1]
+                        if raw_p and not raw_p.startswith("gAAAAA"):
+                            enc_p = encrypt_secret(raw_p)
+                            conn.execute(text("UPDATE app_settings SET smtp_password = :p WHERE id = :sid"), {"p": enc_p, "sid": setting_id})
+                    conn.commit()
+            except Exception as enc_err:
+                print(f"Encryption migration notice: {enc_err}")
     except Exception as e:
         print(f"Migration notice: {e}")

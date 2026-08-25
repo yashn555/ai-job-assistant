@@ -161,16 +161,82 @@ def generate_email_content(job: ExtractedJob, candidate_profile: Dict[str, Any])
     job_desc = job.job_description or ""
     req_skills_str = job.skills or ""
 
+def personalize_explicit_subject(subject_template: str, cand_name: str, role: str) -> str:
+    """
+    Replaces any variations of candidate name and role placeholders in explicit subject templates.
+    Handles: (Your Name), [Your Name], {Your Name}, <Your Name>, (Name), [Name], {Name}, <Name>,
+             (Position), [Position], {Position}, <Position>, (Role), [Role], {Role}, <Role>,
+             '- Name', '- Position', 'Position - Name', etc.
+    """
+    if not subject_template:
+        return f"Application for {role} Position - {cand_name}"
+    
+    subj = sanitize_text(subject_template.strip())
+    
+    # 1. Replace bracketed name placeholders
+    subj = re.sub(r'(?i)[\(\[\{<]\s*(?:your\s+)?(?:candidate\s+)?name\s*[\)\]\}>]', cand_name, subj)
+    subj = re.sub(r'(?i)\(?your\s*name\)?', cand_name, subj)
+    subj = re.sub(r'(?i)\[your\s*name\]', cand_name, subj)
+    
+    # 2. Replace bracketed role/position placeholders
+    subj = re.sub(r'(?i)[\(\[\{<]\s*(?:target\s+)?(?:position|role|job\s*title)\s*[\)\]\}>]', role, subj)
+    
+    # 3. Replace word tokens and hyphenated combinations
+    subj = re.sub(r'(?i)\bposition\s*-\s*name\b', f'{role} - {cand_name}', subj)
+    subj = re.sub(r'(?i)\brole\s*-\s*name\b', f'{role} - {cand_name}', subj)
+    subj = re.sub(r'(?i)\s*-\s*(?:your\s+)?name\s*$', f' - {cand_name}', subj)
+    subj = re.sub(r'(?i)\s*-\s*(?:target\s+)?position\b', f' - {role}', subj)
+    subj = re.sub(r'(?i)\s*-\s*(?:target\s+)?role\b', f' - {role}', subj)
+    
+    return subj.strip()
+
+def generate_email_content(job: ExtractedJob, candidate_profile: Dict[str, Any]) -> Dict[str, str]:
+    """
+    Advanced Job Profile-Aware LLM Engine for Application Email Generation.
+    Dynamically customizes email paragraphs, skill highlights, and project alignment
+    strictly based on the target Job Profile & Candidate Profile across all job domains.
+    """
+    cand_name = sanitize_text(candidate_profile.get("name") or "Candidate")
+    cand_email = sanitize_text(candidate_profile.get("email") or "")
+    cand_phone = sanitize_text(candidate_profile.get("phone") or "")
+    
+    degree = sanitize_text(candidate_profile.get("degree") or "")
+    college = sanitize_text(candidate_profile.get("college") or "")
+    grad_year = sanitize_text(candidate_profile.get("graduation_year") or "")
+    
+    linkedin = candidate_profile.get("linkedin_url") or ""
+    github = candidate_profile.get("github_url") or ""
+    portfolio = candidate_profile.get("portfolio_url") or ""
+    
+    raw_skills = candidate_profile.get("skills", [])
+    if isinstance(raw_skills, str):
+        cand_skills = [s.strip() for s in raw_skills.split(',') if s.strip()]
+    else:
+        cand_skills = list(raw_skills) if raw_skills else []
+        
+    raw_projects = candidate_profile.get("projects", [])
+    if isinstance(raw_projects, str):
+        projects = [p.strip() for p in raw_projects.split(',') if p.strip()]
+    else:
+        projects = list(raw_projects) if raw_projects else []
+
+    # Clean Company Name & Role
+    company = sanitize_text(job.company_name or "").strip()
+    company = re.sub(r'(?i)^(?:Company|🏢)\s*[:\-]*\s*', '', company).strip()
+    if not company or company.lower() == "company" or company == "Unknown Company":
+        company = "your company"
+
+    role = sanitize_text(job.role or "").strip()
+    role = re.sub(r'(?i)^(?:Role|Position|👤)\s*[:\-]*\s*', '', role).strip()
+    if not role:
+        role = "Software Developer"
+
+    job_desc = job.job_description or ""
+    req_skills_str = job.skills or ""
+
     # Subject Selection — personalize explicit subjects containing placeholder patterns
     if job.explicit_subject and job.explicit_subject.strip():
-        subject = sanitize_text(job.explicit_subject.strip())
-        # Replace common placeholders like "(Your Name)", "[Your Name]", "- Name" with candidate name
-        subject = re.sub(r'(?i)\(?your\s*name\)?', cand_name, subject)
-        subject = re.sub(r'(?i)\[your\s*name\]', cand_name, subject)
-        # Replace "- Name" at the end with "- CandidateName"
-        subject = re.sub(r'(?i)\b-\s*name\s*$', f'- {cand_name}', subject)
-        # Replace "- Position" with actual role
-        subject = re.sub(r'(?i)\b-\s*position\b', f'- {role}', subject)
+        subject = personalize_explicit_subject(job.explicit_subject, cand_name, role)
     else:
         subject = f"Application for {role} Position - {cand_name}"
 
@@ -191,7 +257,18 @@ def generate_email_content(job: ExtractedJob, candidate_profile: Dict[str, Any])
     # Combine matched skills first, then fill with general skills
     selected_skills = matched_skills + [s for s in other_skills if s not in matched_skills]
     if not selected_skills:
-        selected_skills = ["React.js", "JavaScript", "Node.js", "REST APIs", "Python", "SQL"]
+        if domain in ["HR_RECRUITMENT"]:
+            selected_skills = ["Talent Acquisition", "Recruitment", "Communication", "People Operations", "MS Office"]
+        elif domain in ["BUSINESS_MARKETING"]:
+            selected_skills = ["Business Development", "Client Relations", "Market Research", "Communication", "Strategic Marketing"]
+        elif domain in ["QA_TESTING"]:
+            selected_skills = ["Manual Testing", "Test Case Design", "Bug Tracking", "STLC", "Automation Testing"]
+        elif domain in ["DEVOPS_CLOUD"]:
+            selected_skills = ["Docker", "Linux", "CI/CD", "Git", "Cloud Infrastructure"]
+        elif domain in ["DATA_ANALYTICS"]:
+            selected_skills = ["Data Analysis", "SQL", "Excel", "Data Visualization", "Python"]
+        else:
+            selected_skills = ["React.js", "JavaScript", "Node.js", "REST APIs", "Python", "SQL"]
     
     skills_formatted = ", ".join(selected_skills[:8])
 
@@ -205,9 +282,20 @@ def generate_email_content(job: ExtractedJob, candidate_profile: Dict[str, Any])
         if college:
             qual += f" from {college}"
     elif college:
-        qual = f"I am a Computer Science Engineering student at {college}"
+        qual = f"I am a student at {college}"
     else:
-        qual = "I am a software engineering candidate"
+        if domain in ["HR_RECRUITMENT"]:
+            qual = "I am a proactive human resources candidate"
+        elif domain in ["BUSINESS_MARKETING"]:
+            qual = "I am an enthusiastic business and marketing candidate"
+        elif domain in ["QA_TESTING"]:
+            qual = "I am a quality assurance candidate"
+        elif domain in ["DEVOPS_CLOUD"]:
+            qual = "I am a DevOps and cloud engineering candidate"
+        elif domain in ["DATA_ANALYTICS"]:
+            qual = "I am a data analytics candidate"
+        else:
+            qual = "I am a software engineering candidate"
 
     # Domain-Specific Experience & Project Paragraph Customization
     if domain == "AI_FRONTEND":

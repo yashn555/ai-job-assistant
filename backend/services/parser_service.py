@@ -84,7 +84,7 @@ def extract_single_job_deterministic(block: str) -> ExtractedJob:
     # Extract Recipient Email
     email_match = re.search(EMAIL_REGEX, block)
     if email_match:
-        email = email_match.group(0)
+        email = email_match.group(0).rstrip('.,;:)>\'"')
 
     # 1. Company Name Matching
     m_comp = re.search(r'(?i)(?:🏢\s*)?Company(?:\s*name)?\s*[:\-]\s*([A-Za-z0-9\s&\.\-\(\)]+?)(?=\s*(?:👤|Role|Position|HR Email|Location|📍|🎓|Batch|💰|Stipend|Salary|⚙️|Skills|📩|Email|Send|$|\n))', block)

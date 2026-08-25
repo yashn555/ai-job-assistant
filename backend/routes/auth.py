@@ -10,6 +10,7 @@ from typing import Optional
 from backend.database.db import get_db
 from backend.models.models import User, CandidateProfile, AppSettings
 from backend.models.schemas import UserSignup, UserLogin, AuthResponse, UserResponse
+from backend.services.crypto_service import encrypt_secret, decrypt_secret, mask_secret
 
 router = APIRouter(prefix="/api/auth", tags=["Auth"])
 
@@ -20,11 +21,13 @@ def hash_password(password: str) -> str:
     return key.hex()
 
 def create_token(user: User) -> str:
+    # Encrypt any app password before embedding into stateless JWT token payload
+    encrypted_pass = encrypt_secret(user.app_password) if user.app_password else ""
     payload = {
         "id": user.id,
         "email": user.email,
         "name": user.name,
-        "app_pass": user.app_password or "",
+        "app_pass": encrypted_pass,
         "ts": int(time.time())
     }
     payload_bytes = json.dumps(payload).encode("utf-8")
@@ -126,12 +129,14 @@ def signup(payload: UserSignup, db: Session = Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="An account with this email already exists.")
 
+    encrypted_app_pass = encrypt_secret(payload.app_password.strip()) if payload.app_password else None
+
     new_user = User(
         name=payload.name.strip(),
         email=email_clean,
         phone=payload.phone.strip() if payload.phone else "",
         password_hash=hash_password(payload.password),
-        app_password=payload.app_password.strip() if payload.app_password else None
+        app_password=encrypted_app_pass
     )
     db.add(new_user)
     db.commit()
@@ -153,14 +158,14 @@ def signup(payload: UserSignup, db: Session = Depends(get_db)):
     )
     db.add(profile)
 
-    # Initialize App Settings with provided Email and App Password
+    # Initialize App Settings with encrypted App Password
     app_settings = AppSettings(
         user_id=new_user.id,
         auto_send=False,
         smtp_host="smtp.gmail.com",
         smtp_port=587,
         smtp_username=new_user.email,
-        smtp_password=payload.app_password.strip() if payload.app_password else "",
+        smtp_password=encrypted_app_pass or "",
         sender_email=new_user.email,
         active_resume=""
     )
@@ -168,9 +173,11 @@ def signup(payload: UserSignup, db: Session = Depends(get_db)):
     db.commit()
 
     token = create_token(new_user)
+    user_resp = UserResponse.model_validate(new_user)
+    user_resp.app_password = mask_secret(new_user.app_password)
     return AuthResponse(
         token=token,
-        user=UserResponse.model_validate(new_user)
+        user=user_resp
     )
 
 
@@ -182,12 +189,16 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Invalid email or password.")
 
     token = create_token(user)
+    user_resp = UserResponse.model_validate(user)
+    user_resp.app_password = mask_secret(user.app_password)
     return AuthResponse(
         token=token,
-        user=UserResponse.model_validate(user)
+        user=user_resp
     )
 
 
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
-    return UserResponse.model_validate(current_user)
+    user_resp = UserResponse.model_validate(current_user)
+    user_resp.app_password = mask_secret(current_user.app_password)
+    return user_resp
