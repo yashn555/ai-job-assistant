@@ -197,6 +197,24 @@ def login(payload: UserLogin, db: Session = Depends(get_db)):
     )
 
 
+@router.get("/login")
+def login_info():
+    return {
+        "status": "ready",
+        "endpoint": "/api/auth/login",
+        "method": "POST",
+        "description": "Send a POST request with JSON payload containing 'email' and 'password' to log in."
+    }
+
+@router.get("/signup")
+def signup_info():
+    return {
+        "status": "ready",
+        "endpoint": "/api/auth/signup",
+        "method": "POST",
+        "description": "Send a POST request with JSON payload containing 'name', 'email', 'password', and optional 'app_password' to register."
+    }
+
 @router.get("/me", response_model=UserResponse)
 def get_me(current_user: User = Depends(get_current_user)):
     user_resp = UserResponse.model_validate(current_user)
