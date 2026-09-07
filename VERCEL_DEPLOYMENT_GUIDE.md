@@ -56,12 +56,13 @@ Before clicking **Deploy**, expand the **Environment Variables** section on Verc
 
 | Key | Value |
 |---|---|
-| `NVIDIA_API_KEY` | `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` |
+| `NVIDIA_API_KEY` | `your_nvidia_api_key_here` |
 | `SMTP_HOST` | `smtp.gmail.com` |
 | `SMTP_PORT` | `587` |
-| `SMTP_USERNAME` | `yashnagapure25@gmail.com` |
-| `SMTP_PASSWORD` | `awmtyyfozljwmbvu` |
-| `SENDER_EMAIL` | `yashnagapure25@gmail.com` |
+| `SMTP_USERNAME` | `your_email@gmail.com` |
+| `SMTP_PASSWORD` | `your_16_char_gmail_app_password` |
+| `SENDER_EMAIL` | `your_email@gmail.com` |
+| `MONGODB_URI` | `your_mongodb_connection_string` |
 
 ---
 

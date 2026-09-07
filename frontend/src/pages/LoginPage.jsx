@@ -261,7 +261,7 @@ export default function LoginPage({ onAuthSuccess }) {
               type="email"
               name="email"
               required
-              placeholder="e.g. yashnagapure25@gmail.com"
+              placeholder="e.g. yourname@gmail.com"
               value={formData.email}
               onChange={handleChange}
               className="form-input"
@@ -277,7 +277,7 @@ export default function LoginPage({ onAuthSuccess }) {
               type="password"
               name="password"
               required
-              placeholder="Enter password"
+              placeholder="••••••••"
               value={formData.password}
               onChange={handleChange}
               className="form-input"
@@ -311,7 +311,7 @@ export default function LoginPage({ onAuthSuccess }) {
               <input
                 type="password"
                 name="app_password"
-                placeholder="16-character Gmail App Password (e.g. awmtyyfozljwmbvu)"
+                placeholder="16-character Gmail App Password (e.g. abcd efgh ijkl mnop)"
                 value={formData.app_password}
                 onChange={handleChange}
                 className="form-input"
