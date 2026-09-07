@@ -1,19 +1,41 @@
 import json
 import os
+import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, Any
 
 from backend.database.db import get_db
 from backend.models.models import CandidateProfile, AppSettings, User
 from backend.models.schemas import ProfileSchema, SettingsSchema, TestEmailRequest, ResumeExtractResponse
-from backend.services.resume_service import save_resume_file, list_uploaded_resumes, remove_resume_file
+from backend.services.resume_service import (
+    save_resume_file,
+    list_uploaded_resumes,
+    remove_resume_file,
+    ensure_resume_on_disk
+)
 from backend.services.email_service import send_application_email
 from backend.services.resume_extractor_service import extract_text_from_pdf_or_docx, parse_resume_details
 from backend.services.crypto_service import encrypt_secret, decrypt_secret, mask_secret, is_masked
 from backend.routes.auth import get_current_user, get_optional_user
 
+logger = logging.getLogger("backend.routes.settings")
 router = APIRouter(prefix="/api/settings", tags=["Settings"])
+
+
+def safe_json_list(val: Any) -> List[Any]:
+    if not val:
+        return []
+    if isinstance(val, list):
+        return val
+    if isinstance(val, str):
+        try:
+            parsed = json.loads(val)
+            if isinstance(parsed, list):
+                return parsed
+        except Exception:
+            return [v.strip() for v in val.split(",") if v.strip()]
+    return []
 
 
 @router.get("/profile", response_model=ProfileSchema)
@@ -44,8 +66,8 @@ def get_profile(
         linkedin_url=profile.linkedin_url or "",
         github_url=profile.github_url or "",
         portfolio_url=profile.portfolio_url or "",
-        skills=json.loads(profile.skills_json) if profile.skills_json else [],
-        projects=json.loads(profile.projects_json) if profile.projects_json else [],
+        skills=safe_json_list(profile.skills_json),
+        projects=safe_json_list(profile.projects_json),
         bio=profile.bio or "",
         is_profile_complete=bool(profile.is_profile_complete)
     )
@@ -84,9 +106,9 @@ def update_profile(
     if payload.portfolio_url is not None:
         profile.portfolio_url = payload.portfolio_url
     if payload.skills is not None:
-        profile.skills_json = json.dumps(payload.skills)
+        profile.skills_json = json.dumps(payload.skills) if isinstance(payload.skills, list) else str(payload.skills)
     if payload.projects is not None:
-        profile.projects_json = json.dumps(payload.projects)
+        profile.projects_json = json.dumps(payload.projects) if isinstance(payload.projects, list) else str(payload.projects)
     if payload.bio is not None:
         profile.bio = payload.bio
 
@@ -120,6 +142,41 @@ async def extract_resume_profile(
     import base64
     settings.active_resume = filename
     settings.resume_base64 = base64.b64encode(bytes_data).decode("utf-8")
+    
+    # Auto-populate CandidateProfile with extracted fields
+    profile = db.query(CandidateProfile).filter(CandidateProfile.user_id == current_user.id).first()
+    if not profile:
+        profile = CandidateProfile(user_id=current_user.id)
+        db.add(profile)
+
+    if extracted.get("name") and (not profile.name or profile.name in ("User", "", current_user.email)):
+        profile.name = extracted["name"]
+        current_user.name = extracted["name"]
+    if extracted.get("email") and not profile.email:
+        profile.email = extracted["email"]
+    if extracted.get("phone"):
+        profile.phone = extracted["phone"]
+        current_user.phone = extracted["phone"]
+    if extracted.get("degree"):
+        profile.degree = extracted["degree"]
+    if extracted.get("college"):
+        profile.college = extracted["college"]
+    if extracted.get("graduation_year"):
+        profile.graduation_year = extracted["graduation_year"]
+    if extracted.get("linkedin_url"):
+        profile.linkedin_url = extracted["linkedin_url"]
+    if extracted.get("github_url"):
+        profile.github_url = extracted["github_url"]
+    if extracted.get("portfolio_url"):
+        profile.portfolio_url = extracted["portfolio_url"]
+    if extracted.get("skills"):
+        profile.skills_json = json.dumps(extracted["skills"])
+    if extracted.get("projects"):
+        profile.projects_json = json.dumps(extracted["projects"])
+    if extracted.get("bio"):
+        profile.bio = extracted["bio"]
+
+    profile.is_profile_complete = True
     db.commit()
 
     if not extracted.get("email"):
@@ -224,11 +281,19 @@ async def upload_resume(
     return {"message": "Resume uploaded successfully.", "filename": filename}
 
 
-
 @router.get("/resume")
-def get_resumes(current_user: Optional[User] = Depends(get_optional_user)):
+def get_resumes(
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_optional_user)
+):
+    if current_user:
+        settings = db.query(AppSettings).filter(AppSettings.user_id == current_user.id).first()
+        if settings and settings.active_resume and settings.resume_base64:
+            try:
+                ensure_resume_on_disk(settings.active_resume, settings.resume_base64)
+            except Exception as e:
+                logger.warning(f"Error ensuring resume on disk: {e}")
     return list_uploaded_resumes()
-
 
 
 @router.delete("/resume/{filename}")

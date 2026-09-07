@@ -258,10 +258,17 @@ export default function ProfileForm({
         <input
           type="file"
           ref={extractFileRef}
-          onChange={(e) => e.target.files?.[0] && handleExtractResumeFile(e.target.files[0])}
+          onChange={(e) => {
+            if (e.target.files?.[0]) {
+              const selectedFile = e.target.files[0];
+              e.target.value = '';
+              handleExtractResumeFile(selectedFile);
+            }
+          }}
           accept=".pdf,.docx,.txt"
           style={{ display: 'none' }}
         />
+
 
         <button
           type="button"

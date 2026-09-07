@@ -21,11 +21,15 @@ export default function EmailPreviewModal({
   onRegenerate, 
   onSend, 
   isRegenerating,
-  isSending
+  isSending,
+  sendingIds
 }) {
   if (!isOpen || !app) return null;
 
+  const isCurrentlySending = isSending || (Array.isArray(sendingIds) && app ? sendingIds.includes(app.id) : false);
+
   const defaultTemplateBody = `Dear Hiring Team,\n\nI am writing to apply for the position of ${app?.role || 'Software Engineer'} at ${app?.company_name || 'your company'}.\n\nI bring a strong background in software development and technical problem solving. I am eager to contribute my technical capabilities and dedication to your engineering team.\n\nPlease find my resume attached for your consideration. I would welcome the opportunity to discuss how my background aligns with your team's goals.\n\nThank you for your time and consideration.\n\nBest regards,\nCandidate`;
+
 
   const [companyName, setCompanyName] = useState(app.company_name || '');
   const [role, setRole] = useState(app.role || '');
@@ -241,13 +245,14 @@ export default function EmailPreviewModal({
 
           <button 
             type="button" 
-            className="btn btn-primary"
-            onClick={handleSendSubmit}
-            disabled={!recipientEmail || isSending}
+            className="btn btn-primary" 
+            onClick={handleSendSubmit} 
+            disabled={!recipientEmail || isCurrentlySending}
           >
-            {isSending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
+            {isCurrentlySending ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
             Send Application
           </button>
+
         </div>
       </div>
     </div>

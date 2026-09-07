@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
-import { Clipboard, Upload, FileText, Sparkles, Loader2 } from 'lucide-react';
+import { Clipboard, Upload, FileText, Sparkles, Loader2, CheckCircle2, Paperclip } from 'lucide-react';
 
-export default function ChatInput({ onParseText, onUploadFile, onResumeUpload, isParsing }) {
+export default function ChatInput({ onParseText, onUploadFile, onResumeUpload, isParsing, activeResume }) {
   const [inputText, setInputText] = useState('');
   const fileInputRef = useRef(null);
   const resumeInputRef = useRef(null);
@@ -31,11 +31,30 @@ export default function ChatInput({ onParseText, onUploadFile, onResumeUpload, i
       borderRadius: '16px',
       padding: '24px'
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px', flexWrap: 'wrap', gap: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <Sparkles size={20} color="#6366f1" />
           <h3 style={{ fontSize: '1.1rem', fontWeight: '600' }}>Paste Job Posting / Opportunity Details</h3>
         </div>
+
+        {/* Attached Resume Status Tag */}
+        {activeResume && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '4px 12px',
+            backgroundColor: 'rgba(34, 197, 94, 0.12)',
+            border: '1px solid rgba(34, 197, 94, 0.3)',
+            borderRadius: '20px',
+            fontSize: '0.78rem',
+            color: '#4ade80'
+          }}>
+            <Paperclip size={13} />
+            <span>Attached Resume: <strong>{activeResume}</strong></span>
+            <CheckCircle2 size={13} />
+          </div>
+        )}
       </div>
 
       {/* Large Input Text Area */}
@@ -96,7 +115,7 @@ export default function ChatInput({ onParseText, onUploadFile, onResumeUpload, i
             <Upload size={16} /> Upload Job File
           </button>
 
-          {/* Upload Resume */}
+          {/* Upload / Replace Resume */}
           <input
             type="file"
             ref={resumeInputRef}
@@ -108,8 +127,9 @@ export default function ChatInput({ onParseText, onUploadFile, onResumeUpload, i
             type="button"
             className="btn btn-outline"
             onClick={() => resumeInputRef.current?.click()}
+            title={activeResume ? "Click to replace active resume" : "Upload your resume PDF"}
           >
-            <FileText size={16} /> Upload Resume
+            <FileText size={16} /> {activeResume ? 'Change Resume' : 'Upload Resume'}
           </button>
         </div>
 
@@ -135,3 +155,4 @@ export default function ChatInput({ onParseText, onUploadFile, onResumeUpload, i
     </div>
   );
 }
+

@@ -63,21 +63,24 @@ export default function App() {
     }
   };
 
-  const loadData = async () => {
+  const loadData = async (isInitialAuth = false) => {
     try {
-      const [appsRes, profRes, settingsRes, resumesRes] = await Promise.all([
+      const results = await Promise.allSettled([
         api.getApplications(),
         api.getProfile(),
         api.getAppSettings(),
         api.getResumes()
       ]);
-      setApplications(appsRes || []);
-      setProfile(profRes);
-      setAppSettings(settingsRes);
-      setResumesList(resumesRes || []);
 
-      // If candidate profile or App password not set, launch onboarding flow automatically
-      if (profRes && (!profRes.degree || !settingsRes?.smtp_password)) {
+      if (results[0].status === 'fulfilled') setApplications(results[0].value || []);
+      if (results[1].status === 'fulfilled' && results[1].value) setProfile(results[1].value);
+      if (results[2].status === 'fulfilled' && results[2].value) setAppSettings(results[2].value);
+      if (results[3].status === 'fulfilled') setResumesList(results[3].value || []);
+
+      // Launch onboarding ONLY on initial signup if profile is brand new and not complete
+      const profRes = results[1].status === 'fulfilled' ? results[1].value : null;
+      const isDismissed = localStorage.getItem('job_assistant_onboarding_dismissed') === 'true';
+      if (isInitialAuth && !isDismissed && profRes && !profRes.is_profile_complete && !profRes.degree) {
         setShowOnboarding(true);
       }
     } catch (err) {
@@ -87,8 +90,9 @@ export default function App() {
 
   const handleAuthSuccess = (userData) => {
     setUser(userData);
-    loadData();
+    loadData(true);
   };
+
 
   const handleLogout = () => {
     api.logout();
@@ -317,6 +321,12 @@ export default function App() {
           setAppSettings(updated);
         }}
         onCompleteOnboarding={() => {
+          localStorage.setItem('job_assistant_onboarding_dismissed', 'true');
+          setShowOnboarding(false);
+          setActiveTab('dashboard');
+        }}
+        onSkipOnboarding={() => {
+          localStorage.setItem('job_assistant_onboarding_dismissed', 'true');
           setShowOnboarding(false);
           setActiveTab('dashboard');
         }}
@@ -358,8 +368,10 @@ export default function App() {
             isParsing={isParsing}
             isBatchSending={isBatchSending}
             sendingIds={sendingIds}
+            activeResume={appSettings?.active_resume}
           />
         )}
+
 
         {activeTab === 'profile' && (
           <ProfilePage

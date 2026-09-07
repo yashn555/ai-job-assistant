@@ -14,7 +14,8 @@ export default function Dashboard({
   onSkip, 
   isParsing,
   isBatchSending,
-  sendingIds
+  sendingIds,
+  activeResume
 }) {
   const totalCount = applications.length;
   const generatedCount = applications.filter(a => a.status === 'GENERATED' || a.status === 'REVIEWED').length;
@@ -87,7 +88,9 @@ export default function Dashboard({
         onUploadFile={onUploadFile}
         onResumeUpload={onResumeUpload}
         isParsing={isParsing}
+        activeResume={activeResume}
       />
+
 
       {/* Applications List & Batch Action Bar */}
       <div>

@@ -23,7 +23,8 @@ export default function OnboardingFlow({
   appSettings, 
   onSaveProfile, 
   onSaveAppSettings, 
-  onCompleteOnboarding 
+  onCompleteOnboarding,
+  onSkipOnboarding
 }) {
   const [step, setStep] = useState(1); // 1: Profile Details, 2: App Password, 3: Saving/Spinner, 4: Ready Confirmation
   const [loading, setLoading] = useState(false);
@@ -187,25 +188,46 @@ export default function OnboardingFlow({
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <span style={{
-              width: '10px',
-              height: '10px',
-              borderRadius: '50%',
-              backgroundColor: step >= 1 ? 'var(--accent-primary)' : 'var(--border-color)'
-            }} />
-            <span style={{
-              width: '10px',
-              height: '10px',
-              borderRadius: '50%',
-              backgroundColor: step >= 2 ? 'var(--accent-primary)' : 'var(--border-color)'
-            }} />
-            <span style={{
-              width: '10px',
-              height: '10px',
-              borderRadius: '50%',
-              backgroundColor: step >= 4 ? '#4ade80' : 'var(--border-color)'
-            }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <span style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                backgroundColor: step >= 1 ? 'var(--accent-primary)' : 'var(--border-color)'
+              }} />
+              <span style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                backgroundColor: step >= 2 ? 'var(--accent-primary)' : 'var(--border-color)'
+              }} />
+              <span style={{
+                width: '10px',
+                height: '10px',
+                borderRadius: '50%',
+                backgroundColor: step >= 4 ? '#4ade80' : 'var(--border-color)'
+              }} />
+            </div>
+
+            {onSkipOnboarding && (
+              <button
+                type="button"
+                onClick={onSkipOnboarding}
+                style={{
+                  background: 'none',
+                  border: '1px solid var(--border-color)',
+                  borderRadius: '8px',
+                  color: 'var(--text-secondary)',
+                  padding: '5px 10px',
+                  fontSize: '0.78rem',
+                  cursor: 'pointer',
+                  fontWeight: '600'
+                }}
+              >
+                Skip & Go to Dashboard
+              </button>
+            )}
           </div>
         </div>
 
@@ -246,10 +268,17 @@ export default function OnboardingFlow({
               <input
                 type="file"
                 ref={fileRef}
-                onChange={(e) => e.target.files?.[0] && handleExtractFromResume(e.target.files[0])}
+                onChange={(e) => {
+                  if (e.target.files?.[0]) {
+                    const selectedFile = e.target.files[0];
+                    e.target.value = '';
+                    handleExtractFromResume(selectedFile);
+                  }
+                }}
                 accept=".pdf,.docx,.txt"
                 style={{ display: 'none' }}
               />
+
 
               <button
                 type="button"
